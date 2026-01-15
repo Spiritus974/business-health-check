@@ -41,6 +41,7 @@ export interface AuditActions {
   submitAudit: (data: AuditData) => void;
   resetAudit: () => void;
   setIsPdfGenerating: (value: boolean) => void;
+  downloadPdf: () => Promise<void>;
 }
 
 export interface AuditContextType extends AuditState, AuditActions {}

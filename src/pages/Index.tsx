@@ -51,7 +51,7 @@ const Index = () => {
               {/* Global Score */}
               <div className="flex flex-col items-center gap-4">
                 <GlobalScoreDisplay score={scores.global} businessName={businessName} />
-                {auditData && <PDFDownloadButton auditData={auditData} scores={scores} />}
+                {auditData && <PDFDownloadButton />}
               </div>
               
               {/* Dimension Scores */}
