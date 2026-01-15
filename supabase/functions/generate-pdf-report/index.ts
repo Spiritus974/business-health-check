@@ -1,0 +1,1707 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface AuditData {
+  nom: string;
+  secteur: string;
+  variant?: string;
+  margebrutepct: number;
+  caannuel: number;
+  effectifetp: number;
+  chargesrhpct: number;
+  digitalpct: number;
+  fidelisationpct: number;
+  tauxoccupation: number;
+  nbservices: number;
+}
+
+interface Scores {
+  global: number;
+  financier: number;
+  operationnel: number;
+  commercial: number;
+  strategique: number;
+}
+
+function getScoreLevel(score: number): { level: string; label: string; color: string } {
+  if (score >= 80) return { level: 'excellent', label: 'Excellent', color: '#10b981' };
+  if (score >= 60) return { level: 'bon', label: 'Bon', color: '#3b82f6' };
+  if (score >= 40) return { level: 'critique', label: 'À améliorer', color: '#f59e0b' };
+  return { level: 'danger', label: 'Critique', color: '#ef4444' };
+}
+
+function generateRecommendations(data: AuditData, scores: Scores): string[] {
+  const recommendations: string[] = [];
+  
+  if (scores.financier < 60) {
+    recommendations.push("Optimiser la marge brute par une révision des prix d'achat et de vente");
+    recommendations.push("Améliorer la productivité par ETP via la formation et l'optimisation des processus");
+    recommendations.push("Analyser la structure des charges RH et identifier les leviers d'optimisation");
+  }
+  
+  if (scores.operationnel < 60) {
+    recommendations.push("Optimiser le planning pour augmenter le taux d'occupation");
+    recommendations.push("Réduire les temps morts et améliorer l'efficacité opérationnelle");
+    recommendations.push("Mettre en place des outils de suivi de la productivité");
+  }
+  
+  if (scores.commercial < 60) {
+    recommendations.push("Développer la présence digitale et les outils de prise de RDV en ligne");
+    recommendations.push("Mettre en place un programme de fidélisation client structuré");
+    recommendations.push("Améliorer la communication client via newsletters et rappels automatisés");
+  }
+  
+  if (scores.strategique < 60) {
+    recommendations.push("Diversifier l'offre de services pour augmenter le panier moyen");
+    recommendations.push("Identifier de nouvelles opportunités de développement");
+    recommendations.push("Élaborer un plan stratégique à 3-5 ans");
+  }
+  
+  if (recommendations.length === 0) {
+    recommendations.push("Maintenir les bonnes pratiques actuelles");
+    recommendations.push("Continuer à surveiller les indicateurs clés de performance");
+    recommendations.push("Explorer de nouvelles opportunités de croissance");
+  }
+  
+  return recommendations;
+}
+
+function generateStrengths(scores: Scores): string[] {
+  const strengths: string[] = [];
+  
+  if (scores.financier >= 70) {
+    strengths.push("Excellente santé financière avec des marges optimisées");
+  }
+  if (scores.operationnel >= 70) {
+    strengths.push("Efficacité opérationnelle remarquable");
+  }
+  if (scores.commercial >= 70) {
+    strengths.push("Stratégie commerciale et digitale performante");
+  }
+  if (scores.strategique >= 70) {
+    strengths.push("Positionnement stratégique solide avec une offre diversifiée");
+  }
+  
+  if (strengths.length === 0) {
+    strengths.push("Potentiel d'amélioration identifié sur l'ensemble des axes");
+  }
+  
+  return strengths;
+}
+
+function generateHTMLReport(data: AuditData, scores: Scores): string {
+  const date = new Date().toLocaleDateString('fr-FR', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  const globalLevel = getScoreLevel(scores.global);
+  const financierLevel = getScoreLevel(scores.financier);
+  const operationnelLevel = getScoreLevel(scores.operationnel);
+  const commercialLevel = getScoreLevel(scores.commercial);
+  const strategiqueLevel = getScoreLevel(scores.strategique);
+  
+  const recommendations = generateRecommendations(data, scores);
+  const strengths = generateStrengths(scores);
+  
+  const caEtp = (data.caannuel / Math.max(data.effectifetp, 0.1)).toFixed(0);
+  
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Rapport d'Audit - ${data.nom || 'Entreprise'}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #1a1a2e;
+      line-height: 1.6;
+      background: #ffffff;
+    }
+    
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20mm;
+      page-break-after: always;
+      background: #ffffff;
+      position: relative;
+    }
+    
+    .page:last-child {
+      page-break-after: auto;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #6366f1;
+    }
+    
+    .logo {
+      font-size: 28px;
+      font-weight: 800;
+      color: #6366f1;
+    }
+    
+    .logo span {
+      color: #f59e0b;
+    }
+    
+    .date {
+      color: #64748b;
+      font-size: 14px;
+    }
+    
+    .cover {
+      text-align: center;
+      padding-top: 80px;
+    }
+    
+    .cover h1 {
+      font-size: 42px;
+      font-weight: 800;
+      color: #1a1a2e;
+      margin-bottom: 20px;
+    }
+    
+    .cover .subtitle {
+      font-size: 24px;
+      color: #64748b;
+      margin-bottom: 60px;
+    }
+    
+    .cover .company {
+      font-size: 32px;
+      font-weight: 700;
+      color: #6366f1;
+      margin-bottom: 20px;
+    }
+    
+    .cover .sector {
+      font-size: 18px;
+      color: #64748b;
+      margin-bottom: 80px;
+    }
+    
+    .score-circle {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, ${globalLevel.color}20, ${globalLevel.color}40);
+      border: 6px solid ${globalLevel.color};
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 30px;
+    }
+    
+    .score-value {
+      font-size: 56px;
+      font-weight: 800;
+      color: ${globalLevel.color};
+    }
+    
+    .score-label {
+      font-size: 18px;
+      color: ${globalLevel.color};
+      font-weight: 600;
+    }
+    
+    h2 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 30px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    h3 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 20px;
+    }
+    
+    .section {
+      margin-bottom: 40px;
+    }
+    
+    .card {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border-left: 4px solid #6366f1;
+    }
+    
+    .score-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      background: #ffffff;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .score-card-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+    
+    .score-card-value {
+      font-size: 28px;
+      font-weight: 800;
+    }
+    
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 16px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .metric-row:last-child {
+      border-bottom: none;
+    }
+    
+    .metric-label {
+      font-weight: 500;
+      color: #64748b;
+    }
+    
+    .metric-value {
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 12px;
+      background: #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.3s ease;
+    }
+    
+    .recommendation-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: #ffffff;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .recommendation-icon {
+      width: 32px;
+      height: 32px;
+      background: #6366f1;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    
+    .recommendation-text {
+      font-size: 15px;
+      color: #1a1a2e;
+      line-height: 1.5;
+    }
+    
+    .strength-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: #dcfce7;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .strength-icon {
+      color: #10b981;
+      font-size: 20px;
+    }
+    
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    
+    .table th, .table td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .table th {
+      background: #6366f1;
+      color: white;
+      font-weight: 600;
+    }
+    
+    .table tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    
+    .footer {
+      position: absolute;
+      bottom: 20mm;
+      left: 20mm;
+      right: 20mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 12px;
+      color: #64748b;
+    }
+    
+    .page-number {
+      background: #6366f1;
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+    
+    .chart-placeholder {
+      width: 100%;
+      height: 200px;
+      background: linear-gradient(135deg, #f0f4ff, #e0e7ff);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 20px 0;
+    }
+    
+    .dimension-detail {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    
+    .dimension-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    
+    .dimension-score {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .dimension-score-value {
+      font-size: 24px;
+      font-weight: 800;
+    }
+    
+    .analysis-box {
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    
+    .toc-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      border-bottom: 1px dotted #cbd5e1;
+    }
+    
+    .toc-title {
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+    
+    .toc-page {
+      color: #6366f1;
+      font-weight: 700;
+    }
+    
+    .benchmark-indicator {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .benchmark-excellent { background: #dcfce7; color: #166534; }
+    .benchmark-bon { background: #dbeafe; color: #1e40af; }
+    .benchmark-critique { background: #fef3c7; color: #92400e; }
+    .benchmark-danger { background: #fee2e2; color: #991b1b; }
+    
+    .action-priority {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #fef3c7;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid #f59e0b;
+    }
+    
+    .priority-high {
+      background: #fee2e2;
+      border-left-color: #ef4444;
+    }
+    
+    .priority-medium {
+      background: #fef3c7;
+      border-left-color: #f59e0b;
+    }
+    
+    .priority-low {
+      background: #dcfce7;
+      border-left-color: #10b981;
+    }
+    
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+    
+    .kpi-item {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .kpi-value {
+      font-size: 32px;
+      font-weight: 800;
+      color: #6366f1;
+    }
+    
+    .kpi-label {
+      font-size: 14px;
+      color: #64748b;
+      margin-top: 8px;
+    }
+    
+    @media print {
+      body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .page { page-break-after: always; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Page 1: Cover -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <div class="cover">
+      <h1>Rapport d'Audit 4D</h1>
+      <div class="subtitle">Analyse complète de performance</div>
+      <div class="company">${data.nom || 'Entreprise'}</div>
+      <div class="sector">Secteur: ${data.secteur}${data.variant ? ` - ${data.variant}` : ''}</div>
+      <div class="score-circle">
+        <div class="score-value">${scores.global.toFixed(1)}</div>
+        <div class="score-label">${globalLevel.label}</div>
+      </div>
+      <p style="color: #64748b; font-size: 14px; margin-top: 40px;">
+        Benchmarks sectoriels v2.1 • Scoring 4D paramétré
+      </p>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">1</div>
+    </div>
+  </div>
+
+  <!-- Page 2: Table of Contents -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>Table des Matières</h2>
+    <div class="section">
+      <div class="toc-item"><span class="toc-title">1. Synthèse Exécutive</span><span class="toc-page">3</span></div>
+      <div class="toc-item"><span class="toc-title">2. Vue d'ensemble des Scores</span><span class="toc-page">4</span></div>
+      <div class="toc-item"><span class="toc-title">3. Données d'Entreprise</span><span class="toc-page">5</span></div>
+      <div class="toc-item"><span class="toc-title">4. Analyse Financière</span><span class="toc-page">6-8</span></div>
+      <div class="toc-item"><span class="toc-title">5. Performance Opérationnelle</span><span class="toc-page">9-11</span></div>
+      <div class="toc-item"><span class="toc-title">6. Dimension Commerciale</span><span class="toc-page">12-14</span></div>
+      <div class="toc-item"><span class="toc-title">7. Vision Stratégique</span><span class="toc-page">15-17</span></div>
+      <div class="toc-item"><span class="toc-title">8. Benchmarks Sectoriels</span><span class="toc-page">18-19</span></div>
+      <div class="toc-item"><span class="toc-title">9. Plan d'Actions Prioritaires</span><span class="toc-page">20-21</span></div>
+      <div class="toc-item"><span class="toc-title">10. Recommandations Détaillées</span><span class="toc-page">22-23</span></div>
+      <div class="toc-item"><span class="toc-title">11. Conclusion et Prochaines Étapes</span><span class="toc-page">24</span></div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">2</div>
+    </div>
+  </div>
+
+  <!-- Page 3: Executive Summary -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>1. Synthèse Exécutive</h2>
+    <div class="card">
+      <h3>Résumé de l'Audit</h3>
+      <p style="margin-bottom: 20px; color: #64748b;">
+        Ce rapport présente une analyse complète de la performance de <strong>${data.nom || 'votre entreprise'}</strong> 
+        basée sur le modèle de scoring 4D (Financier, Opérationnel, Commercial, Stratégique) et les benchmarks 
+        sectoriels ${data.secteur}.
+      </p>
+      <div style="display: flex; justify-content: center; margin: 30px 0;">
+        <div class="score-circle" style="width: 150px; height: 150px;">
+          <div class="score-value" style="font-size: 42px;">${scores.global.toFixed(1)}</div>
+          <div class="score-label">${globalLevel.label}</div>
+        </div>
+      </div>
+    </div>
+    <h3>Points Forts Identifiés</h3>
+    ${strengths.map(s => `
+      <div class="strength-item">
+        <span class="strength-icon">✓</span>
+        <span>${s}</span>
+      </div>
+    `).join('')}
+    <h3 style="margin-top: 30px;">Principales Recommandations</h3>
+    ${recommendations.slice(0, 3).map((r, i) => `
+      <div class="recommendation-item">
+        <div class="recommendation-icon">${i + 1}</div>
+        <div class="recommendation-text">${r}</div>
+      </div>
+    `).join('')}
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">3</div>
+    </div>
+  </div>
+
+  <!-- Page 4: Score Overview -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>2. Vue d'ensemble des Scores</h2>
+    <div class="kpi-grid">
+      <div class="kpi-item">
+        <div class="kpi-value" style="color: ${financierLevel.color}">${scores.financier.toFixed(1)}</div>
+        <div class="kpi-label">Score Financier</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${scores.financier}%; background: ${financierLevel.color}"></div>
+        </div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value" style="color: ${operationnelLevel.color}">${scores.operationnel.toFixed(1)}</div>
+        <div class="kpi-label">Score Opérationnel</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${scores.operationnel}%; background: ${operationnelLevel.color}"></div>
+        </div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value" style="color: ${commercialLevel.color}">${scores.commercial.toFixed(1)}</div>
+        <div class="kpi-label">Score Commercial</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${scores.commercial}%; background: ${commercialLevel.color}"></div>
+        </div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value" style="color: ${strategiqueLevel.color}">${scores.strategique.toFixed(1)}</div>
+        <div class="kpi-label">Score Stratégique</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${scores.strategique}%; background: ${strategiqueLevel.color}"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 30px;">
+      <h3>Pondération du Score Global</h3>
+      <div class="metric-row">
+        <span class="metric-label">Dimension Financière</span>
+        <span class="metric-value">35%</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Dimension Opérationnelle</span>
+        <span class="metric-value">25%</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Dimension Commerciale</span>
+        <span class="metric-value">20%</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Dimension Stratégique</span>
+        <span class="metric-value">20%</span>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">4</div>
+    </div>
+  </div>
+
+  <!-- Page 5: Company Data -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>3. Données d'Entreprise</h2>
+    <div class="dimension-detail">
+      <h3>Informations Générales</h3>
+      <div class="metric-row">
+        <span class="metric-label">Nom de l'entreprise</span>
+        <span class="metric-value">${data.nom || 'Non renseigné'}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Secteur d'activité</span>
+        <span class="metric-value">${data.secteur}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Variante sectorielle</span>
+        <span class="metric-value">${data.variant || 'Standard'}</span>
+      </div>
+    </div>
+    <div class="dimension-detail">
+      <h3>Données Financières</h3>
+      <div class="metric-row">
+        <span class="metric-label">Chiffre d'affaires annuel</span>
+        <span class="metric-value">${data.caannuel.toLocaleString('fr-FR')} €</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Marge brute</span>
+        <span class="metric-value">${data.margebrutepct}%</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Charges RH</span>
+        <span class="metric-value">${data.chargesrhpct}%</span>
+      </div>
+    </div>
+    <div class="dimension-detail">
+      <h3>Données Opérationnelles</h3>
+      <div class="metric-row">
+        <span class="metric-label">Effectif (ETP)</span>
+        <span class="metric-value">${data.effectifetp}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">CA par ETP</span>
+        <span class="metric-value">${parseInt(caEtp).toLocaleString('fr-FR')} €</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Taux d'occupation</span>
+        <span class="metric-value">${(data.tauxoccupation * 100).toFixed(0)}%</span>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">5</div>
+    </div>
+  </div>
+
+  <!-- Page 6: Financial Analysis 1 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>4. Analyse Financière</h2>
+    <div class="dimension-detail">
+      <div class="dimension-header">
+        <h3>Score Financier</h3>
+        <div class="dimension-score" style="background: ${financierLevel.color}20; border: 3px solid ${financierLevel.color};">
+          <div class="dimension-score-value" style="color: ${financierLevel.color}">${scores.financier.toFixed(1)}</div>
+        </div>
+      </div>
+      <span class="benchmark-indicator benchmark-${financierLevel.level}">${financierLevel.label}</span>
+      <div class="analysis-box">
+        <p>La dimension financière représente <strong>35%</strong> du score global. Elle évalue la rentabilité, 
+        la productivité et la maîtrise des charges de votre structure.</p>
+      </div>
+    </div>
+    <h3>Indicateurs Clés</h3>
+    <table class="table">
+      <tr>
+        <th>Indicateur</th>
+        <th>Valeur</th>
+        <th>Seuil Bon</th>
+        <th>Seuil Excellent</th>
+      </tr>
+      <tr>
+        <td>Marge Brute</td>
+        <td><strong>${data.margebrutepct}%</strong></td>
+        <td>70%</td>
+        <td>75%</td>
+      </tr>
+      <tr>
+        <td>CA par ETP</td>
+        <td><strong>${parseInt(caEtp).toLocaleString('fr-FR')} €</strong></td>
+        <td>100 000 €</td>
+        <td>130 000 €</td>
+      </tr>
+      <tr>
+        <td>Charges RH</td>
+        <td><strong>${data.chargesrhpct}%</strong></td>
+        <td>≤55%</td>
+        <td>≤50%</td>
+      </tr>
+    </table>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">6</div>
+    </div>
+  </div>
+
+  <!-- Page 7: Financial Analysis 2 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>4. Analyse Financière (suite)</h2>
+    <h3>Analyse de la Marge Brute</h3>
+    <div class="card">
+      <p>Votre marge brute de <strong>${data.margebrutepct}%</strong> ${data.margebrutepct >= 70 ? 'atteint' : 'n\'atteint pas encore'} le seuil de performance.</p>
+      <div class="progress-bar" style="margin-top: 16px;">
+        <div class="progress-fill" style="width: ${Math.min(data.margebrutepct, 100)}%; background: ${data.margebrutepct >= 75 ? '#10b981' : data.margebrutepct >= 70 ? '#3b82f6' : '#f59e0b'}"></div>
+      </div>
+      <div class="analysis-box" style="margin-top: 16px;">
+        <p><strong>Leviers d'amélioration :</strong></p>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+          <li>Révision de la politique tarifaire</li>
+          <li>Négociation des coûts d'achat</li>
+          <li>Optimisation du mix produits/services</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Productivité par ETP</h3>
+    <div class="card">
+      <p>Le chiffre d'affaires par ETP s'élève à <strong>${parseInt(caEtp).toLocaleString('fr-FR')} €</strong>.</p>
+      <div class="analysis-box" style="margin-top: 16px;">
+        <p><strong>Facteurs d'influence :</strong></p>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+          <li>Niveau de formation des équipes</li>
+          <li>Outils et processus de travail</li>
+          <li>Organisation du temps de travail</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">7</div>
+    </div>
+  </div>
+
+  <!-- Page 8: Financial Analysis 3 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>4. Analyse Financière (fin)</h2>
+    <h3>Structure des Charges RH</h3>
+    <div class="card">
+      <p>Les charges RH représentent <strong>${data.chargesrhpct}%</strong> du chiffre d'affaires.</p>
+      <div class="progress-bar" style="margin-top: 16px;">
+        <div class="progress-fill" style="width: ${Math.min(data.chargesrhpct, 100)}%; background: ${data.chargesrhpct <= 50 ? '#10b981' : data.chargesrhpct <= 55 ? '#3b82f6' : '#f59e0b'}"></div>
+      </div>
+    </div>
+    <div class="dimension-detail">
+      <h3>Recommandations Financières</h3>
+      ${scores.financier < 80 ? `
+        <div class="action-priority ${scores.financier < 50 ? 'priority-high' : 'priority-medium'}">
+          <strong>⚡</strong>
+          <span>Réaliser un audit détaillé des coûts et de la structure tarifaire</span>
+        </div>
+        <div class="action-priority priority-medium">
+          <strong>📊</strong>
+          <span>Mettre en place un tableau de bord de suivi mensuel</span>
+        </div>
+        <div class="action-priority priority-low">
+          <strong>📈</strong>
+          <span>Former les équipes à la gestion financière</span>
+        </div>
+      ` : `
+        <div class="strength-item">
+          <span class="strength-icon">✓</span>
+          <span>Excellente performance financière - Maintenir les bonnes pratiques</span>
+        </div>
+      `}
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">8</div>
+    </div>
+  </div>
+
+  <!-- Page 9: Operational Analysis 1 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>5. Performance Opérationnelle</h2>
+    <div class="dimension-detail">
+      <div class="dimension-header">
+        <h3>Score Opérationnel</h3>
+        <div class="dimension-score" style="background: ${operationnelLevel.color}20; border: 3px solid ${operationnelLevel.color};">
+          <div class="dimension-score-value" style="color: ${operationnelLevel.color}">${scores.operationnel.toFixed(1)}</div>
+        </div>
+      </div>
+      <span class="benchmark-indicator benchmark-${operationnelLevel.level}">${operationnelLevel.label}</span>
+      <div class="analysis-box">
+        <p>La dimension opérationnelle représente <strong>25%</strong> du score global. Elle mesure 
+        l'efficacité des opérations quotidiennes et l'utilisation des ressources.</p>
+      </div>
+    </div>
+    <h3>Taux d'Occupation</h3>
+    <div class="card">
+      <div style="text-align: center; padding: 30px 0;">
+        <div style="font-size: 64px; font-weight: 800; color: ${operationnelLevel.color};">
+          ${(data.tauxoccupation * 100).toFixed(0)}%
+        </div>
+        <p style="color: #64748b; margin-top: 10px;">Taux d'occupation actuel</p>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: ${data.tauxoccupation * 100}%; background: ${operationnelLevel.color}"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">9</div>
+    </div>
+  </div>
+
+  <!-- Page 10: Operational Analysis 2 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>5. Performance Opérationnelle (suite)</h2>
+    <h3>Analyse du Taux d'Occupation</h3>
+    <table class="table">
+      <tr>
+        <th>Niveau</th>
+        <th>Seuil</th>
+        <th>Interprétation</th>
+      </tr>
+      <tr>
+        <td><span class="benchmark-indicator benchmark-excellent">Excellent</span></td>
+        <td>≥95%</td>
+        <td>Capacité optimisée, attention à la surcharge</td>
+      </tr>
+      <tr>
+        <td><span class="benchmark-indicator benchmark-bon">Bon</span></td>
+        <td>85-94%</td>
+        <td>Bonne utilisation des ressources</td>
+      </tr>
+      <tr>
+        <td><span class="benchmark-indicator benchmark-critique">À améliorer</span></td>
+        <td>75-84%</td>
+        <td>Marge d'optimisation possible</td>
+      </tr>
+      <tr>
+        <td><span class="benchmark-indicator benchmark-danger">Critique</span></td>
+        <td>&lt;75%</td>
+        <td>Sous-utilisation des ressources</td>
+      </tr>
+    </table>
+    <div class="card" style="margin-top: 30px;">
+      <h3>Impact Économique</h3>
+      <p>Chaque point de taux d'occupation supplémentaire peut représenter :</p>
+      <div class="kpi-grid" style="margin-top: 20px;">
+        <div class="kpi-item">
+          <div class="kpi-value" style="font-size: 24px;">${(data.caannuel * 0.01).toLocaleString('fr-FR')} €</div>
+          <div class="kpi-label">CA potentiel / point</div>
+        </div>
+        <div class="kpi-item">
+          <div class="kpi-value" style="font-size: 24px;">${((100 - data.tauxoccupation * 100) * data.caannuel * 0.01).toLocaleString('fr-FR')} €</div>
+          <div class="kpi-label">Potentiel non exploité</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">10</div>
+    </div>
+  </div>
+
+  <!-- Page 11: Operational Analysis 3 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>5. Performance Opérationnelle (fin)</h2>
+    <h3>Leviers d'Optimisation Opérationnelle</h3>
+    <div class="card">
+      <div class="action-priority priority-medium">
+        <strong>📅</strong>
+        <span>Optimisation de la prise de rendez-vous en ligne</span>
+      </div>
+      <div class="action-priority priority-medium">
+        <strong>⏱️</strong>
+        <span>Réduction des temps d'attente et des créneaux vides</span>
+      </div>
+      <div class="action-priority priority-low">
+        <strong>🔄</strong>
+        <span>Amélioration des processus de travail</span>
+      </div>
+    </div>
+    <div class="dimension-detail">
+      <h3>Plan d'Action Opérationnel</h3>
+      <table class="table">
+        <tr>
+          <th>Action</th>
+          <th>Priorité</th>
+          <th>Échéance</th>
+        </tr>
+        <tr>
+          <td>Audit des créneaux horaires</td>
+          <td><span class="benchmark-indicator benchmark-danger">Haute</span></td>
+          <td>1 mois</td>
+        </tr>
+        <tr>
+          <td>Mise en place suivi temps réel</td>
+          <td><span class="benchmark-indicator benchmark-critique">Moyenne</span></td>
+          <td>3 mois</td>
+        </tr>
+        <tr>
+          <td>Formation équipes</td>
+          <td><span class="benchmark-indicator benchmark-bon">Standard</span></td>
+          <td>6 mois</td>
+        </tr>
+      </table>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">11</div>
+    </div>
+  </div>
+
+  <!-- Page 12: Commercial Analysis 1 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>6. Dimension Commerciale</h2>
+    <div class="dimension-detail">
+      <div class="dimension-header">
+        <h3>Score Commercial</h3>
+        <div class="dimension-score" style="background: ${commercialLevel.color}20; border: 3px solid ${commercialLevel.color};">
+          <div class="dimension-score-value" style="color: ${commercialLevel.color}">${scores.commercial.toFixed(1)}</div>
+        </div>
+      </div>
+      <span class="benchmark-indicator benchmark-${commercialLevel.level}">${commercialLevel.label}</span>
+      <div class="analysis-box">
+        <p>La dimension commerciale représente <strong>20%</strong> du score global. Elle évalue 
+        la maturité digitale et la capacité à fidéliser les clients.</p>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-item">
+        <div class="kpi-value">${data.digitalpct}%</div>
+        <div class="kpi-label">Taux de Digitalisation</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${data.digitalpct}%; background: ${data.digitalpct >= 80 ? '#10b981' : '#f59e0b'}"></div>
+        </div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-value">${data.fidelisationpct}%</div>
+        <div class="kpi-label">Taux de Fidélisation</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${data.fidelisationpct}%; background: ${data.fidelisationpct >= 85 ? '#10b981' : '#f59e0b'}"></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">12</div>
+    </div>
+  </div>
+
+  <!-- Page 13: Commercial Analysis 2 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>6. Dimension Commerciale (suite)</h2>
+    <h3>Maturité Digitale</h3>
+    <div class="card">
+      <p>Votre taux de digitalisation de <strong>${data.digitalpct}%</strong> indique une ${data.digitalpct >= 80 ? 'excellente' : data.digitalpct >= 60 ? 'bonne' : 'marge de'} maturité digitale.</p>
+      <div class="analysis-box" style="margin-top: 16px;">
+        <p><strong>Composantes évaluées :</strong></p>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+          <li>Présence web et réseaux sociaux</li>
+          <li>Prise de rendez-vous en ligne</li>
+          <li>Communication digitale (email, SMS)</li>
+          <li>Outils de gestion digitalisés</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Fidélisation Client</h3>
+    <div class="card">
+      <p>Votre taux de fidélisation de <strong>${data.fidelisationpct}%</strong> ${data.fidelisationpct >= 85 ? 'est excellent' : data.fidelisationpct >= 70 ? 'est satisfaisant' : 'peut être amélioré'}.</p>
+      <div class="analysis-box" style="margin-top: 16px;">
+        <p><strong>Leviers de fidélisation :</strong></p>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+          <li>Programme de fidélité structuré</li>
+          <li>Suivi personnalisé des clients</li>
+          <li>Rappels automatisés</li>
+          <li>Offres exclusives</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">13</div>
+    </div>
+  </div>
+
+  <!-- Page 14: Commercial Analysis 3 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>6. Dimension Commerciale (fin)</h2>
+    <h3>Recommandations Commerciales</h3>
+    <div class="dimension-detail">
+      ${scores.commercial < 80 ? `
+        <div class="action-priority ${scores.commercial < 50 ? 'priority-high' : 'priority-medium'}">
+          <strong>🌐</strong>
+          <span>Développer la présence digitale et les outils en ligne</span>
+        </div>
+        <div class="action-priority priority-medium">
+          <strong>💳</strong>
+          <span>Mettre en place un programme de fidélité structuré</span>
+        </div>
+        <div class="action-priority priority-low">
+          <strong>📧</strong>
+          <span>Automatiser les communications client (rappels, newsletters)</span>
+        </div>
+      ` : `
+        <div class="strength-item">
+          <span class="strength-icon">✓</span>
+          <span>Excellente performance commerciale - Capitaliser sur les acquis</span>
+        </div>
+      `}
+    </div>
+    <h3>Objectifs à 12 Mois</h3>
+    <table class="table">
+      <tr>
+        <th>Indicateur</th>
+        <th>Actuel</th>
+        <th>Objectif</th>
+        <th>Gap</th>
+      </tr>
+      <tr>
+        <td>Digitalisation</td>
+        <td>${data.digitalpct}%</td>
+        <td>90%</td>
+        <td>${Math.max(0, 90 - data.digitalpct)}%</td>
+      </tr>
+      <tr>
+        <td>Fidélisation</td>
+        <td>${data.fidelisationpct}%</td>
+        <td>90%</td>
+        <td>${Math.max(0, 90 - data.fidelisationpct)}%</td>
+      </tr>
+    </table>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">14</div>
+    </div>
+  </div>
+
+  <!-- Page 15: Strategic Analysis 1 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>7. Vision Stratégique</h2>
+    <div class="dimension-detail">
+      <div class="dimension-header">
+        <h3>Score Stratégique</h3>
+        <div class="dimension-score" style="background: ${strategiqueLevel.color}20; border: 3px solid ${strategiqueLevel.color};">
+          <div class="dimension-score-value" style="color: ${strategiqueLevel.color}">${scores.strategique.toFixed(1)}</div>
+        </div>
+      </div>
+      <span class="benchmark-indicator benchmark-${strategiqueLevel.level}">${strategiqueLevel.label}</span>
+      <div class="analysis-box">
+        <p>La dimension stratégique représente <strong>20%</strong> du score global. Elle évalue 
+        la diversification de l'offre et le positionnement sur le marché.</p>
+      </div>
+    </div>
+    <h3>Diversification de l'Offre</h3>
+    <div class="card">
+      <div style="text-align: center; padding: 30px 0;">
+        <div style="font-size: 64px; font-weight: 800; color: ${strategiqueLevel.color};">
+          ${data.nbservices}
+        </div>
+        <p style="color: #64748b; margin-top: 10px;">Services/Produits proposés</p>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">15</div>
+    </div>
+  </div>
+
+  <!-- Page 16: Strategic Analysis 2 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>7. Vision Stratégique (suite)</h2>
+    <h3>Analyse de l'Offre</h3>
+    <div class="card">
+      <p>Avec <strong>${data.nbservices} services/produits</strong>, votre offre ${data.nbservices >= 5 ? 'est bien diversifiée' : data.nbservices >= 3 ? 'couvre les besoins essentiels' : 'gagnerait à être élargie'}.</p>
+      <div class="analysis-box" style="margin-top: 16px;">
+        <p><strong>Bénéfices d'une offre diversifiée :</strong></p>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+          <li>Augmentation du panier moyen</li>
+          <li>Meilleure fidélisation client</li>
+          <li>Réduction de la dépendance à un service</li>
+          <li>Attractivité renforcée</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Positionnement Concurrentiel</h3>
+    <table class="table">
+      <tr>
+        <th>Critère</th>
+        <th>Évaluation</th>
+        <th>Commentaire</th>
+      </tr>
+      <tr>
+        <td>Diversification</td>
+        <td><span class="benchmark-indicator benchmark-${data.nbservices >= 5 ? 'excellent' : data.nbservices >= 3 ? 'bon' : 'critique'}">${data.nbservices >= 5 ? 'Fort' : data.nbservices >= 3 ? 'Moyen' : 'Faible'}</span></td>
+        <td>${data.nbservices} services</td>
+      </tr>
+      <tr>
+        <td>Innovation</td>
+        <td><span class="benchmark-indicator benchmark-bon">À développer</span></td>
+        <td>Potentiel d'expansion</td>
+      </tr>
+      <tr>
+        <td>Adaptabilité</td>
+        <td><span class="benchmark-indicator benchmark-${scores.commercial >= 70 ? 'excellent' : 'critique'}">${scores.commercial >= 70 ? 'Bonne' : 'À renforcer'}</span></td>
+        <td>Basé sur score commercial</td>
+      </tr>
+    </table>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">16</div>
+    </div>
+  </div>
+
+  <!-- Page 17: Strategic Analysis 3 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>7. Vision Stratégique (fin)</h2>
+    <h3>Recommandations Stratégiques</h3>
+    <div class="dimension-detail">
+      <div class="action-priority priority-medium">
+        <strong>🎯</strong>
+        <span>Élaborer une vision stratégique à 3-5 ans</span>
+      </div>
+      <div class="action-priority priority-medium">
+        <strong>📊</strong>
+        <span>Réaliser une étude de marché pour identifier les opportunités</span>
+      </div>
+      <div class="action-priority priority-low">
+        <strong>🚀</strong>
+        <span>Développer de nouveaux services à forte valeur ajoutée</span>
+      </div>
+    </div>
+    <h3>Axes de Développement Prioritaires</h3>
+    <div class="card">
+      <ol style="padding-left: 20px;">
+        <li style="margin-bottom: 12px;"><strong>Court terme (0-6 mois)</strong> : Optimiser l'offre existante</li>
+        <li style="margin-bottom: 12px;"><strong>Moyen terme (6-18 mois)</strong> : Développer 1-2 nouveaux services</li>
+        <li style="margin-bottom: 12px;"><strong>Long terme (18-36 mois)</strong> : Consolider le positionnement</li>
+      </ol>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">17</div>
+    </div>
+  </div>
+
+  <!-- Page 18: Benchmarks 1 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>8. Benchmarks Sectoriels</h2>
+    <div class="card">
+      <h3>Référentiel ${data.secteur}</h3>
+      <p style="color: #64748b; margin-bottom: 20px;">
+        Les benchmarks utilisés sont issus d'études sectorielles actualisées 
+        et adaptés à la variante "${data.variant || 'standard'}".
+      </p>
+    </div>
+    <h3>Indicateurs Financiers</h3>
+    <table class="table">
+      <tr>
+        <th>Indicateur</th>
+        <th>Critique</th>
+        <th>Bon</th>
+        <th>Excellent</th>
+        <th>Vous</th>
+      </tr>
+      <tr>
+        <td>Marge brute</td>
+        <td>&lt;55%</td>
+        <td>70%</td>
+        <td>≥75%</td>
+        <td><strong>${data.margebrutepct}%</strong></td>
+      </tr>
+      <tr>
+        <td>CA/ETP</td>
+        <td>&lt;70k€</td>
+        <td>100k€</td>
+        <td>≥130k€</td>
+        <td><strong>${parseInt(caEtp).toLocaleString('fr-FR')}€</strong></td>
+      </tr>
+      <tr>
+        <td>Charges RH</td>
+        <td>&gt;70%</td>
+        <td>≤55%</td>
+        <td>≤50%</td>
+        <td><strong>${data.chargesrhpct}%</strong></td>
+      </tr>
+    </table>
+    <h3 style="margin-top: 30px;">Indicateurs Commerciaux</h3>
+    <table class="table">
+      <tr>
+        <th>Indicateur</th>
+        <th>Critique</th>
+        <th>Bon</th>
+        <th>Excellent</th>
+        <th>Vous</th>
+      </tr>
+      <tr>
+        <td>Digitalisation</td>
+        <td>&lt;30%</td>
+        <td>80%</td>
+        <td>≥95%</td>
+        <td><strong>${data.digitalpct}%</strong></td>
+      </tr>
+      <tr>
+        <td>Fidélisation</td>
+        <td>&lt;60%</td>
+        <td>85%</td>
+        <td>≥92%</td>
+        <td><strong>${data.fidelisationpct}%</strong></td>
+      </tr>
+    </table>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">18</div>
+    </div>
+  </div>
+
+  <!-- Page 19: Benchmarks 2 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>8. Benchmarks Sectoriels (fin)</h2>
+    <h3>Positionnement par Rapport au Marché</h3>
+    <div class="dimension-detail">
+      <div class="metric-row">
+        <span class="metric-label">Score Global</span>
+        <span class="metric-value">
+          ${scores.global >= 80 ? 'Top 10%' : scores.global >= 60 ? 'Top 30%' : scores.global >= 40 ? 'Médiane' : 'À améliorer'} du secteur
+        </span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Performance Financière</span>
+        <span class="metric-value">${financierLevel.label}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Efficacité Opérationnelle</span>
+        <span class="metric-value">${operationnelLevel.label}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Maturité Commerciale</span>
+        <span class="metric-value">${commercialLevel.label}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Positionnement Stratégique</span>
+        <span class="metric-value">${strategiqueLevel.label}</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Méthodologie</h3>
+      <p style="color: #64748b;">
+        Le scoring 4D est basé sur une méthodologie éprouvée combinant :
+      </p>
+      <ul style="margin-top: 10px; padding-left: 20px; color: #64748b;">
+        <li>Données sectorielles actualisées (v2.1)</li>
+        <li>Pondération adaptée au secteur ${data.secteur}</li>
+        <li>Comparaison avec les meilleures pratiques</li>
+      </ul>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">19</div>
+    </div>
+  </div>
+
+  <!-- Page 20: Action Plan 1 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>9. Plan d'Actions Prioritaires</h2>
+    <div class="card">
+      <h3>Priorisation des Actions</h3>
+      <p style="color: #64748b; margin-bottom: 16px;">
+        Les actions ci-dessous sont classées par ordre de priorité selon leur impact 
+        potentiel et leur urgence.
+      </p>
+    </div>
+    <h3>Actions Immédiates (0-3 mois)</h3>
+    <div class="dimension-detail">
+      ${scores.financier < 70 ? `
+        <div class="action-priority priority-high">
+          <strong>💰</strong>
+          <span>Audit financier approfondi et plan de redressement si nécessaire</span>
+        </div>
+      ` : ''}
+      ${scores.operationnel < 70 ? `
+        <div class="action-priority priority-high">
+          <strong>⚙️</strong>
+          <span>Optimisation du taux d'occupation et des processus</span>
+        </div>
+      ` : ''}
+      ${scores.commercial < 70 ? `
+        <div class="action-priority priority-high">
+          <strong>📱</strong>
+          <span>Accélération de la transformation digitale</span>
+        </div>
+      ` : ''}
+      <div class="action-priority priority-medium">
+        <strong>📊</strong>
+        <span>Mise en place d'un tableau de bord de pilotage</span>
+      </div>
+    </div>
+    <h3>Actions à Moyen Terme (3-6 mois)</h3>
+    <div class="dimension-detail">
+      <div class="action-priority priority-medium">
+        <strong>🎓</strong>
+        <span>Formation des équipes aux nouvelles pratiques</span>
+      </div>
+      <div class="action-priority priority-medium">
+        <strong>🤝</strong>
+        <span>Mise en place d'un programme de fidélisation structuré</span>
+      </div>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">20</div>
+    </div>
+  </div>
+
+  <!-- Page 21: Action Plan 2 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>9. Plan d'Actions Prioritaires (fin)</h2>
+    <h3>Actions à Long Terme (6-12 mois)</h3>
+    <div class="dimension-detail">
+      <div class="action-priority priority-low">
+        <strong>🚀</strong>
+        <span>Développement de nouveaux services/produits</span>
+      </div>
+      <div class="action-priority priority-low">
+        <strong>📈</strong>
+        <span>Expansion du marché et développement commercial</span>
+      </div>
+      <div class="action-priority priority-low">
+        <strong>🔄</strong>
+        <span>Révision stratégique et ajustement du positionnement</span>
+      </div>
+    </div>
+    <h3>Calendrier de Mise en Œuvre</h3>
+    <table class="table">
+      <tr>
+        <th>Phase</th>
+        <th>Actions</th>
+        <th>Échéance</th>
+        <th>Indicateur</th>
+      </tr>
+      <tr>
+        <td>Phase 1</td>
+        <td>Quick wins opérationnels</td>
+        <td>M+3</td>
+        <td>+5 pts score opérationnel</td>
+      </tr>
+      <tr>
+        <td>Phase 2</td>
+        <td>Transformation digitale</td>
+        <td>M+6</td>
+        <td>+10 pts digitalisation</td>
+      </tr>
+      <tr>
+        <td>Phase 3</td>
+        <td>Excellence opérationnelle</td>
+        <td>M+12</td>
+        <td>Score global ≥70</td>
+      </tr>
+    </table>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">21</div>
+    </div>
+  </div>
+
+  <!-- Page 22: Recommendations 1 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>10. Recommandations Détaillées</h2>
+    <h3>Recommandations par Dimension</h3>
+    <div class="dimension-detail">
+      <h3 style="color: ${financierLevel.color};">Dimension Financière</h3>
+      <ul style="padding-left: 20px;">
+        <li style="margin-bottom: 10px;">Optimiser la structure de coûts pour améliorer la marge brute</li>
+        <li style="margin-bottom: 10px;">Augmenter la productivité par ETP via l'automatisation</li>
+        <li style="margin-bottom: 10px;">Mettre en place un contrôle de gestion rigoureux</li>
+      </ul>
+    </div>
+    <div class="dimension-detail">
+      <h3 style="color: ${operationnelLevel.color};">Dimension Opérationnelle</h3>
+      <ul style="padding-left: 20px;">
+        <li style="margin-bottom: 10px;">Optimiser la gestion des plannings et des rendez-vous</li>
+        <li style="margin-bottom: 10px;">Réduire les temps d'attente et améliorer le flux patient</li>
+        <li style="margin-bottom: 10px;">Mettre en place des indicateurs de suivi en temps réel</li>
+      </ul>
+    </div>
+    <div class="dimension-detail">
+      <h3 style="color: ${commercialLevel.color};">Dimension Commerciale</h3>
+      <ul style="padding-left: 20px;">
+        <li style="margin-bottom: 10px;">Développer la présence digitale (site web, réseaux sociaux)</li>
+        <li style="margin-bottom: 10px;">Implémenter un système de prise de RDV en ligne</li>
+        <li style="margin-bottom: 10px;">Créer un programme de fidélité attractif</li>
+      </ul>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">22</div>
+    </div>
+  </div>
+
+  <!-- Page 23: Recommendations 2 -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>10. Recommandations Détaillées (fin)</h2>
+    <div class="dimension-detail">
+      <h3 style="color: ${strategiqueLevel.color};">Dimension Stratégique</h3>
+      <ul style="padding-left: 20px;">
+        <li style="margin-bottom: 10px;">Diversifier l'offre de services pour augmenter le panier moyen</li>
+        <li style="margin-bottom: 10px;">Élaborer un plan stratégique à 3-5 ans</li>
+        <li style="margin-bottom: 10px;">Identifier les opportunités de développement et d'innovation</li>
+      </ul>
+    </div>
+    <h3>Ressources Recommandées</h3>
+    <div class="card">
+      <div class="metric-row">
+        <span class="metric-label">Budget formation</span>
+        <span class="metric-value">2-3% du CA</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Budget digital</span>
+        <span class="metric-value">3-5% du CA</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Temps de mise en œuvre</span>
+        <span class="metric-value">12-18 mois</span>
+      </div>
+    </div>
+    <h3>Points de Vigilance</h3>
+    <div class="card" style="background: #fef3c7; border-left-color: #f59e0b;">
+      <ul style="padding-left: 20px;">
+        <li style="margin-bottom: 8px;">Ne pas négliger la qualité de service pendant la transformation</li>
+        <li style="margin-bottom: 8px;">Impliquer les équipes dans les changements</li>
+        <li style="margin-bottom: 8px;">Mesurer régulièrement les progrès</li>
+      </ul>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">23</div>
+    </div>
+  </div>
+
+  <!-- Page 24: Conclusion -->
+  <div class="page">
+    <div class="header">
+      <div class="logo">Audit<span>Score</span></div>
+      <div class="date">${date}</div>
+    </div>
+    <h2>11. Conclusion et Prochaines Étapes</h2>
+    <div class="card" style="text-align: center; padding: 40px;">
+      <div class="score-circle" style="margin: 0 auto 30px;">
+        <div class="score-value">${scores.global.toFixed(1)}</div>
+        <div class="score-label">${globalLevel.label}</div>
+      </div>
+      <h3 style="margin-bottom: 20px;">Score Global : ${scores.global.toFixed(1)}/100</h3>
+      <p style="color: #64748b; max-width: 500px; margin: 0 auto;">
+        ${data.nom || 'Votre entreprise'} présente un profil ${globalLevel.label.toLowerCase()} 
+        avec des axes d'amélioration identifiés et des points forts à capitaliser.
+      </p>
+    </div>
+    <h3>Prochaines Étapes</h3>
+    <div class="dimension-detail">
+      <ol style="padding-left: 20px;">
+        <li style="margin-bottom: 16px;">
+          <strong>Semaine 1</strong> : Présentation des résultats à l'équipe dirigeante
+        </li>
+        <li style="margin-bottom: 16px;">
+          <strong>Semaine 2-3</strong> : Priorisation des actions et allocation des ressources
+        </li>
+        <li style="margin-bottom: 16px;">
+          <strong>Mois 1</strong> : Lancement des premières actions quick wins
+        </li>
+        <li style="margin-bottom: 16px;">
+          <strong>Mois 3</strong> : Point d'étape et ajustement du plan
+        </li>
+        <li style="margin-bottom: 16px;">
+          <strong>Mois 6</strong> : Audit intermédiaire de suivi
+        </li>
+      </ol>
+    </div>
+    <div class="card" style="text-align: center; background: linear-gradient(135deg, #6366f120, #6366f140);">
+      <p style="font-size: 18px; font-weight: 600; color: #6366f1;">
+        Merci pour votre confiance !
+      </p>
+      <p style="color: #64748b; margin-top: 10px;">
+        AuditScore • Scoring 4D paramétré • ${new Date().getFullYear()}
+      </p>
+    </div>
+    <div class="footer">
+      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <div class="page-number">24</div>
+    </div>
+  </div>
+
+</body>
+</html>
+  `;
+}
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { auditData, scores } = await req.json();
+
+    if (!auditData || !scores) {
+      return new Response(
+        JSON.stringify({ error: 'Missing auditData or scores' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Generating PDF report for:', auditData.nom);
+    
+    const htmlContent = generateHTMLReport(auditData, scores);
+
+    // Return HTML content that can be converted to PDF on the client side
+    return new Response(
+      JSON.stringify({ html: htmlContent }),
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  } catch (error: unknown) {
+    console.error('Error generating PDF:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(
+      JSON.stringify({ error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

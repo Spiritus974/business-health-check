@@ -3,16 +3,18 @@ import { AuditForm } from '@/components/AuditForm';
 import { GlobalScoreDisplay } from '@/components/GlobalScoreDisplay';
 import { ScoreCard } from '@/components/ScoreCard';
 import { RadarChartDisplay } from '@/components/RadarChart';
+import { PDFDownloadButton } from '@/components/PDFDownloadButton';
 import { computeScores4D, Scores, AuditData } from '@/lib/scoring';
 import { TrendingUp, Users, ShoppingCart, Target, BarChart3 } from 'lucide-react';
-
 const Index = () => {
   const [scores, setScores] = useState<Scores | null>(null);
+  const [auditData, setAuditData] = useState<AuditData | null>(null);
   const [businessName, setBusinessName] = useState('');
 
   const handleSubmit = (data: AuditData) => {
     const computedScores = computeScores4D(data);
     setScores(computedScores);
+    setAuditData(data);
     setBusinessName(data.nom || 'Entreprise');
     
     // Scroll to results
@@ -61,7 +63,10 @@ const Index = () => {
           <div className="container max-w-6xl mx-auto px-4">
             <div className="space-y-8">
               {/* Global Score */}
-              <GlobalScoreDisplay score={scores.global} businessName={businessName} />
+              <div className="flex flex-col items-center gap-4">
+                <GlobalScoreDisplay score={scores.global} businessName={businessName} />
+                {auditData && <PDFDownloadButton auditData={auditData} scores={scores} />}
+              </div>
               
               {/* Dimension Scores */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
