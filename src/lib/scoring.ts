@@ -1,31 +1,9 @@
+// Re-export types from centralized location
+export type { AuditData, Scores, ScoreLevel, ScoreLevelType } from '@/types/audit';
+export { defaultAuditData } from '@/types/audit';
+
 import { getBenchmarks } from './benchmarks';
-
-export interface AuditData {
-  nom: string;
-  secteur: string;
-  variant?: string;
-  margebrutepct: number;
-  caannuel: number;
-  effectifetp: number;
-  chargesrhpct: number;
-  digitalpct: number;
-  fidelisationpct: number;
-  tauxoccupation: number;
-  nbservices: number;
-}
-
-export interface Scores {
-  global: number;
-  financier: number;
-  operationnel: number;
-  commercial: number;
-  strategique: number;
-}
-
-export interface ScoreLevel {
-  level: 'excellent' | 'bon' | 'critique' | 'danger';
-  label: string;
-}
+import type { AuditData, Scores, ScoreLevel } from '@/types/audit';
 
 export function getScoreLevel(score: number): ScoreLevel {
   if (score >= 80) return { level: 'excellent', label: 'Excellent' };
@@ -134,17 +112,3 @@ export function computeScores4D(data: AuditData): Scores {
     strategique: Math.round(scoreStrategique * 10) / 10
   };
 }
-
-export const defaultAuditData: AuditData = {
-  nom: '',
-  secteur: 'Veterinaire',
-  variant: 'veto_standard',
-  margebrutepct: 68,
-  caannuel: 450000,
-  effectifetp: 4.5,
-  chargesrhpct: 52,
-  digitalpct: 85,
-  fidelisationpct: 88,
-  tauxoccupation: 0.85,
-  nbservices: 5
-};

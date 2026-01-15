@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { AuditData, defaultAuditData } from '@/lib/scoring';
+import { AuditData, defaultAuditData } from '@/types/audit';
 import { getAllSectors, getSectorVariants } from '@/lib/benchmarks';
 import { Building2, TrendingUp, Users, Wifi, Heart, BarChart3, Briefcase } from 'lucide-react';
 
