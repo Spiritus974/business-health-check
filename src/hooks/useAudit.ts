@@ -20,11 +20,16 @@ export function useBusinessName() {
 }
 
 export function useAuditActions() {
-  const { submitAudit, resetAudit, setIsPdfGenerating } = useAuditContext();
-  return { submitAudit, resetAudit, setIsPdfGenerating };
+  const { submitAudit, resetAudit, setIsPdfGenerating, downloadPdf } = useAuditContext();
+  return { submitAudit, resetAudit, setIsPdfGenerating, downloadPdf };
 }
 
 export function useAuditStatus() {
   const { isCalculating, isPdfGenerating } = useAuditContext();
   return { isCalculating, isPdfGenerating };
+}
+
+export function useDownloadPdf() {
+  const { downloadPdf, isPdfGenerating } = useAuditContext();
+  return { downloadPdf, isPdfGenerating };
 }
