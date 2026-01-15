@@ -1,27 +1,13 @@
-import { useState } from 'react';
 import { AuditForm } from '@/components/AuditForm';
 import { GlobalScoreDisplay } from '@/components/GlobalScoreDisplay';
 import { ScoreCard } from '@/components/ScoreCard';
 import { RadarChartDisplay } from '@/components/RadarChart';
 import { PDFDownloadButton } from '@/components/PDFDownloadButton';
-import { computeScores4D, Scores, AuditData } from '@/lib/scoring';
+import { useAudit } from '@/hooks/useAudit';
 import { TrendingUp, Users, ShoppingCart, Target, BarChart3 } from 'lucide-react';
-const Index = () => {
-  const [scores, setScores] = useState<Scores | null>(null);
-  const [auditData, setAuditData] = useState<AuditData | null>(null);
-  const [businessName, setBusinessName] = useState('');
 
-  const handleSubmit = (data: AuditData) => {
-    const computedScores = computeScores4D(data);
-    setScores(computedScores);
-    setAuditData(data);
-    setBusinessName(data.nom || 'Entreprise');
-    
-    // Scroll to results
-    setTimeout(() => {
-      document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-  };
+const Index = () => {
+  const { scores, auditData, businessName, submitAudit } = useAudit();
 
   return (
     <div className="min-h-screen bg-background">
@@ -52,7 +38,7 @@ const Index = () => {
           </div>
           
           <div className="max-w-3xl mx-auto">
-            <AuditForm onSubmit={handleSubmit} />
+            <AuditForm onSubmit={submitAudit} />
           </div>
         </div>
       </section>

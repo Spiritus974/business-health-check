@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileDown, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { AuditData, Scores } from '@/lib/scoring';
+import { AuditData, Scores } from '@/types/audit';
 import { toast } from 'sonner';
+import { useAuditStatus, useAuditActions } from '@/hooks/useAudit';
 
 interface PDFDownloadButtonProps {
   auditData: AuditData;
@@ -11,10 +11,11 @@ interface PDFDownloadButtonProps {
 }
 
 export function PDFDownloadButton({ auditData, scores }: PDFDownloadButtonProps) {
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { isPdfGenerating } = useAuditStatus();
+  const { setIsPdfGenerating } = useAuditActions();
 
   const handleDownload = async () => {
-    setIsGenerating(true);
+    setIsPdfGenerating(true);
     
     try {
       const { data, error } = await supabase.functions.invoke('generate-pdf-report', {
@@ -50,17 +51,17 @@ export function PDFDownloadButton({ auditData, scores }: PDFDownloadButtonProps)
       console.error('PDF generation error:', error);
       toast.error('Erreur lors de la génération du PDF');
     } finally {
-      setIsGenerating(false);
+      setIsPdfGenerating(false);
     }
   };
 
   return (
     <Button 
       onClick={handleDownload} 
-      disabled={isGenerating}
+      disabled={isPdfGenerating}
       className="bg-gradient-primary hover:opacity-90 transition-opacity"
     >
-      {isGenerating ? (
+      {isPdfGenerating ? (
         <>
           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           Génération...

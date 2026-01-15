@@ -1,5 +1,5 @@
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { Scores } from '@/lib/scoring';
+import { Scores } from '@/types/audit';
 
 interface RadarChartDisplayProps {
   scores: Scores;
