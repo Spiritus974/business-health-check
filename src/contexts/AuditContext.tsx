@@ -95,12 +95,42 @@ export function AuditProvider({ children }: AuditProviderProps) {
     }
   }, [state.auditData, state.scores]);
 
+  const sendPdfEmail = useCallback(async (email: string) => {
+    if (!state.auditData || !state.scores) {
+      toast.error('Veuillez d\'abord effectuer un audit');
+      return;
+    }
+
+    setState(prev => ({ ...prev, isPdfGenerating: true }));
+
+    try {
+      const { error } = await supabase.functions.invoke('send-pdf-email', {
+        body: { 
+          auditData: state.auditData, 
+          scores: state.scores,
+          recipientEmail: email,
+          businessName: state.businessName
+        }
+      });
+
+      if (error) throw new Error(error.message);
+
+      toast.success(`Rapport envoyé à ${email}`);
+    } catch (error) {
+      console.error('Email send error:', error);
+      toast.error('Erreur lors de l\'envoi du rapport');
+    } finally {
+      setState(prev => ({ ...prev, isPdfGenerating: false }));
+    }
+  }, [state.auditData, state.scores, state.businessName]);
+
   const contextValue: AuditContextType = {
     ...state,
     submitAudit,
     resetAudit,
     setIsPdfGenerating,
-    downloadPdf
+    downloadPdf,
+    sendPdfEmail
   };
 
   return (

@@ -3,6 +3,7 @@ import { GlobalScoreDisplay } from '@/components/GlobalScoreDisplay';
 import { ScoreCard } from '@/components/ScoreCard';
 import { RadarChartDisplay } from '@/components/RadarChart';
 import { PDFDownloadButton } from '@/components/PDFDownloadButton';
+import { EmailPdfButton } from '@/components/EmailPdfButton';
 import { useAudit } from '@/hooks/useAudit';
 import { TrendingUp, Users, ShoppingCart, Target, BarChart3 } from 'lucide-react';
 
@@ -51,7 +52,10 @@ const Index = () => {
               {/* Global Score */}
               <div className="flex flex-col items-center gap-4">
                 <GlobalScoreDisplay score={scores.global} businessName={businessName} />
-                {auditData && <PDFDownloadButton />}
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {auditData && <PDFDownloadButton />}
+                  {auditData && <EmailPdfButton />}
+                </div>
               </div>
               
               {/* Dimension Scores */}

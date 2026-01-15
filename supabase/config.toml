@@ -2,3 +2,6 @@ project_id = "bodjrgkksftxfdjzxyvw"
 
 [functions.generate-pdf-report]
 verify_jwt = false
+
+[functions.send-pdf-email]
+verify_jwt = false
