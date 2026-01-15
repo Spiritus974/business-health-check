@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AuditData, Scores } from '@/types/audit';
 import { toast } from 'sonner';
 import { useAuditStatus, useAuditActions } from '@/hooks/useAudit';
+import html2pdf from 'html2pdf.js';
 
 interface PDFDownloadButtonProps {
   auditData: AuditData;
@@ -30,23 +31,30 @@ export function PDFDownloadButton({ auditData, scores }: PDFDownloadButtonProps)
         throw new Error('No HTML content received');
       }
 
-      // Create a new window with the HTML content
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        throw new Error('Popup blocked - please allow popups for this site');
-      }
+      // Create a temporary container for the HTML
+      const container = document.createElement('div');
+      container.innerHTML = data.html;
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      document.body.appendChild(container);
 
-      printWindow.document.write(data.html);
-      printWindow.document.close();
-
-      // Wait for content to load then trigger print dialog
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print();
-        }, 500);
+      // Configure PDF options
+      const opt = {
+        margin: 0,
+        filename: `audit-${auditData.nom || 'rapport'}-${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      toast.success('Rapport PDF généré avec succès !');
+      // Generate and download PDF
+      await html2pdf().set(opt).from(container).save();
+
+      // Clean up
+      document.body.removeChild(container);
+
+      toast.success('Rapport PDF téléchargé avec succès !');
     } catch (error) {
       console.error('PDF generation error:', error);
       toast.error('Erreur lors de la génération du PDF');
