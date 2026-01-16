@@ -1,7 +1,10 @@
 import { useAuditContext } from '@/contexts/AuditContext';
 
-// Re-export the context hook for convenience
-export const useAudit = useAuditContext;
+// Main hook for common use cases
+export function useAudit() {
+  const { auditData, scores, warnings, businessName, isCalculating, submitAudit, resetAudit } = useAuditContext();
+  return { auditData, scores, warnings, businessName, isCalculating, submitAudit, resetAudit };
+}
 
 // Export individual selectors for more granular access
 export function useAuditData() {
@@ -12,6 +15,11 @@ export function useAuditData() {
 export function useScores() {
   const { scores } = useAuditContext();
   return scores;
+}
+
+export function useWarnings() {
+  const { warnings } = useAuditContext();
+  return warnings;
 }
 
 export function useBusinessName() {
