@@ -4,11 +4,12 @@ import { ScoreCard } from '@/components/ScoreCard';
 import { RadarChartDisplay } from '@/components/RadarChart';
 import { PDFDownloadButton } from '@/components/PDFDownloadButton';
 import { EmailPdfButton } from '@/components/EmailPdfButton';
+import { WarningsDisplay } from '@/components/WarningsDisplay';
 import { useAudit } from '@/hooks/useAudit';
 import { TrendingUp, Users, ShoppingCart, Target, BarChart3 } from 'lucide-react';
 
 const Index = () => {
-  const { scores, auditData, businessName, submitAudit } = useAudit();
+  const { scores, auditData, businessName, warnings, submitAudit } = useAudit();
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,6 +50,13 @@ const Index = () => {
         <section id="results" className="py-16 bg-secondary/30">
           <div className="container max-w-6xl mx-auto px-4">
             <div className="space-y-8">
+              {/* Warnings */}
+              {warnings && warnings.length > 0 && (
+                <div className="max-w-2xl mx-auto">
+                  <WarningsDisplay warnings={warnings} />
+                </div>
+              )}
+              
               {/* Global Score */}
               <div className="flex flex-col items-center gap-4">
                 <GlobalScoreDisplay score={scores.global} businessName={businessName} />
