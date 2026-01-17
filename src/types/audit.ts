@@ -164,6 +164,18 @@ export interface ScoreLevel {
 
 // Decision engine output type
 export type PriorityLevel = 'CRITIQUE' | 'ÉLEVÉ' | 'MODÉRÉ' | 'FAIBLE';
+export type ImpactType = 'CA' | 'MARGE' | 'TRÉSORERIE' | 'COÛTS';
+export type ConfidenceLevel = 'FAIBLE' | 'MOYEN' | 'BON';
+
+export interface QuantifiedRecommendation {
+  lever: string;
+  impactType: ImpactType;
+  estimatedImpactMin: number;
+  estimatedImpactMax: number;
+  unit: '€' | '%';
+  assumptions: string[];
+  confidenceLevel: ConfidenceLevel;
+}
 
 export interface DecisionOutput {
   priorityLevel: PriorityLevel;
@@ -172,6 +184,7 @@ export interface DecisionOutput {
   quickWins: string[];
   structuralActions: string[];
   decisionSummary: string;
+  quantifiedRecommendations: QuantifiedRecommendation[];
 }
 
 export interface AuditState {
