@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { AuditContextType, AuditData, AuditState, initialAuditState, AuditWarning, isAuditDataV2 } from '@/types/audit';
+import { AuditContextType, AuditData, AuditState, initialAuditState, AuditWarning, isAuditDataV2, DecisionOutput } from '@/types/audit';
 import { computeScores4D } from '@/lib/scoring';
 import { getAuditWarnings } from '@/lib/warnings';
+import { computeDecisionOutput } from '@/lib/decisionEngine';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import html2pdf from 'html2pdf.js';
@@ -24,6 +25,9 @@ export function AuditProvider({ children }: AuditProviderProps) {
     // Compute warnings
     const warnings = getAuditWarnings(data);
 
+    // Compute decision output
+    const decision = computeDecisionOutput(data, computedScores, warnings);
+
     // Get business name (handle both V1 and V2)
     const businessName = isAuditDataV2(data) ? data.businessName : data.nom;
     
@@ -31,17 +35,16 @@ export function AuditProvider({ children }: AuditProviderProps) {
       auditData: data,
       scores: computedScores,
       warnings,
+      decision,
       businessName: businessName || 'Entreprise',
       isCalculating: false,
       isPdfGenerating: false
     });
 
-    // Show warnings as toasts
+    // Show critical warnings as toasts
     warnings.forEach(warning => {
       if (warning.type === 'critical') {
         toast.error(warning.message);
-      } else {
-        toast.warning(warning.message);
       }
     });
 
@@ -72,7 +75,8 @@ export function AuditProvider({ children }: AuditProviderProps) {
         body: { 
           auditData: state.auditData, 
           scores: state.scores,
-          warnings: state.warnings 
+          warnings: state.warnings,
+          decision: state.decision
         }
       });
 
@@ -114,7 +118,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     } finally {
       setState(prev => ({ ...prev, isPdfGenerating: false }));
     }
-  }, [state.auditData, state.scores, state.warnings, state.businessName]);
+  }, [state.auditData, state.scores, state.warnings, state.decision, state.businessName]);
 
   const sendPdfEmail = useCallback(async (email: string) => {
     if (!state.auditData || !state.scores) {
@@ -130,6 +134,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
           auditData: state.auditData, 
           scores: state.scores,
           warnings: state.warnings,
+          decision: state.decision,
           recipientEmail: email,
           businessName: state.businessName
         }
@@ -144,7 +149,7 @@ export function AuditProvider({ children }: AuditProviderProps) {
     } finally {
       setState(prev => ({ ...prev, isPdfGenerating: false }));
     }
-  }, [state.auditData, state.scores, state.warnings, state.businessName]);
+  }, [state.auditData, state.scores, state.warnings, state.decision, state.businessName]);
 
   const contextValue: AuditContextType = {
     ...state,

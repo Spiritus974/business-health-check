@@ -162,10 +162,23 @@ export interface ScoreLevel {
   label: string;
 }
 
+// Decision engine output type
+export type PriorityLevel = 'CRITIQUE' | 'ÉLEVÉ' | 'MODÉRÉ' | 'FAIBLE';
+
+export interface DecisionOutput {
+  priorityLevel: PriorityLevel;
+  topRisks: string[];
+  topLevers: string[];
+  quickWins: string[];
+  structuralActions: string[];
+  decisionSummary: string;
+}
+
 export interface AuditState {
   auditData: AuditData | null;
   scores: Scores | null;
   warnings: AuditWarning[];
+  decision: DecisionOutput | null;
   businessName: string;
   isCalculating: boolean;
   isPdfGenerating: boolean;
@@ -238,6 +251,7 @@ export const initialAuditState: AuditState = {
   auditData: null,
   scores: null,
   warnings: [],
+  decision: null,
   businessName: '',
   isCalculating: false,
   isPdfGenerating: false
