@@ -5,11 +5,12 @@ import { RadarChartDisplay } from '@/components/RadarChart';
 import { PDFDownloadButton } from '@/components/PDFDownloadButton';
 import { EmailPdfButton } from '@/components/EmailPdfButton';
 import { WarningsDisplay } from '@/components/WarningsDisplay';
+import { DecisionPanel } from '@/components/DecisionPanel';
 import { useAudit } from '@/hooks/useAudit';
 import { TrendingUp, Users, ShoppingCart, Target, BarChart3 } from 'lucide-react';
 
 const Index = () => {
-  const { scores, auditData, businessName, warnings, submitAudit } = useAudit();
+  const { scores, auditData, businessName, warnings, decision, submitAudit } = useAudit();
 
   return (
     <div className="min-h-screen bg-background">
@@ -65,6 +66,13 @@ const Index = () => {
                   {auditData && <EmailPdfButton />}
                 </div>
               </div>
+
+              {/* Decision Panel */}
+              {decision && (
+                <div className="max-w-4xl mx-auto">
+                  <DecisionPanel decision={decision} />
+                </div>
+              )}
               
               {/* Dimension Scores */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -9,17 +9,10 @@ const corsHeaders = {
 };
 
 interface AuditData {
-  nom: string;
-  secteur: string;
-  variant?: string;
-  margebrutepct: number;
-  caannuel: number;
-  effectifetp: number;
-  chargesrhpct: number;
-  digitalpct: number;
-  fidelisationpct: number;
-  tauxoccupation: number;
-  nbservices: number;
+  nom?: string;
+  businessName?: string;
+  secteur?: string;
+  sector?: string;
 }
 
 interface Scores {
@@ -30,9 +23,19 @@ interface Scores {
   strategique: number;
 }
 
+interface DecisionOutput {
+  priorityLevel: 'CRITIQUE' | 'ÉLEVÉ' | 'MODÉRÉ' | 'FAIBLE';
+  topRisks: string[];
+  topLevers: string[];
+  quickWins: string[];
+  structuralActions: string[];
+  decisionSummary: string;
+}
+
 interface EmailRequest {
   auditData: AuditData;
   scores: Scores;
+  decision?: DecisionOutput;
   recipientEmail: string;
   businessName: string;
 }
@@ -52,13 +55,12 @@ function getScoreLabel(score: number): string {
 }
 
 const handler = async (req: Request): Promise<Response> => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { auditData, scores, recipientEmail, businessName }: EmailRequest = await req.json();
+    const { auditData, scores, decision, recipientEmail, businessName }: EmailRequest = await req.json();
 
     if (!recipientEmail || !recipientEmail.includes('@')) {
       throw new Error('Email invalide');
@@ -66,6 +68,35 @@ const handler = async (req: Request): Promise<Response> => {
 
     const globalColor = getScoreColor(scores.global);
     const globalLabel = getScoreLabel(scores.global);
+    
+    const priorityColor = decision ? getPriorityColor(decision.priorityLevel) : '#3b82f6';
+    
+    const decisionSection = decision ? `
+      <div style="margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 12px; border-left: 4px solid ${priorityColor};">
+        <h3 style="margin: 0 0 10px; color: #1e293b;">Synthèse Décisionnelle</h3>
+        <div style="display: inline-block; padding: 4px 12px; background: ${priorityColor}; color: white; border-radius: 4px; font-weight: bold; margin-bottom: 10px;">
+          Priorité ${decision.priorityLevel}
+        </div>
+        <p style="color: #64748b; margin: 10px 0;">${decision.decisionSummary}</p>
+        ${decision.topLevers.length > 0 ? `
+          <div style="margin-top: 15px;">
+            <strong style="color: #334155;">Leviers prioritaires :</strong>
+            <ul style="margin: 5px 0; padding-left: 20px; color: #475569;">
+              ${decision.topLevers.slice(0, 3).map(l => `<li>${l}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    ` : '';
+
+    function getPriorityColor(level: string): string {
+      switch (level) {
+        case 'CRITIQUE': return '#ef4444';
+        case 'ÉLEVÉ': return '#f59e0b';
+        case 'MODÉRÉ': return '#3b82f6';
+        default: return '#22c55e';
+      }
+    }
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -118,9 +149,13 @@ const handler = async (req: Request): Promise<Response> => {
           <div class="dimension-score" style="color: ${getScoreColor(scores.strategique)}">${scores.strategique}/100</div>
         </div>
       </div>
+      ${decisionSection}
       <p style="margin-top: 30px; color: #64748b; font-size: 14px;">
         Ce rapport a été généré automatiquement par AuditScore. 
-        Pour un rapport complet de 24 pages, téléchargez le PDF depuis l'application.
+        Pour un rapport complet, téléchargez le PDF depuis l'application.
+      </p>
+      <p style="margin-top: 10px; color: #94a3b8; font-size: 12px; font-style: italic;">
+        Cette synthèse constitue une aide à la décision et ne remplace pas un jugement expert.
       </p>
     </div>
     <div class="footer">
