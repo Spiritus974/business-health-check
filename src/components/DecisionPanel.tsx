@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, TrendingUp, Zap, Target, Info } from 'lucide-react';
 import { DECISION_DISCLAIMER, getPriorityBadgeClass } from '@/lib/decisionEngine';
+import { QuantifiedRecommendationsTable } from './QuantifiedRecommendationsTable';
 
 interface DecisionPanelProps {
   decision: DecisionOutput;
@@ -22,7 +23,7 @@ function getPriorityIcon(level: PriorityLevel) {
 }
 
 export function DecisionPanel({ decision }: DecisionPanelProps) {
-  const { priorityLevel, topRisks, topLevers, quickWins, structuralActions, decisionSummary } = decision;
+  const { priorityLevel, topRisks, topLevers, quickWins, structuralActions, decisionSummary, quantifiedRecommendations } = decision;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -135,6 +136,11 @@ export function DecisionPanel({ decision }: DecisionPanelProps) {
           </Card>
         )}
       </div>
+
+      {/* Quantified Recommendations Table */}
+      {quantifiedRecommendations && quantifiedRecommendations.length > 0 && (
+        <QuantifiedRecommendationsTable recommendations={quantifiedRecommendations} />
+      )}
 
       {/* Disclaimer */}
       <div className="flex items-start gap-2 p-4 bg-muted/50 rounded-lg border border-border">

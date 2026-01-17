@@ -3,8 +3,16 @@
  * All rules are explicit and traceable - no hidden logic
  */
 
-import { AuditData, AuditWarning, normalizeToV2 } from '@/types/audit';
-import { Scores } from '@/types/audit';
+import { 
+  AuditData, 
+  AuditWarning, 
+  normalizeToV2, 
+  Scores,
+  QuantifiedRecommendation,
+  ImpactType,
+  ConfidenceLevel,
+  AuditDataV2
+} from '@/types/audit';
 
 // ============= Types =============
 
@@ -17,6 +25,7 @@ export interface DecisionOutput {
   quickWins: string[];
   structuralActions: string[];
   decisionSummary: string;
+  quantifiedRecommendations: QuantifiedRecommendation[];
 }
 
 interface RiskRule {
@@ -278,6 +287,193 @@ function generateDecisionSummary(
   }
 }
 
+// ============= Quantified Recommendations Calculation =============
+
+interface QuantificationRule {
+  id: string;
+  condition: (data: AuditDataV2, scores: Scores) => boolean;
+  lever: string;
+  impactType: ImpactType;
+  calculateImpact: (data: AuditDataV2) => { min: number; max: number };
+  unit: '€' | '%';
+  assumptions: string[];
+  confidenceLevel: ConfidenceLevel;
+}
+
+const QUANTIFICATION_RULES: QuantificationRule[] = [
+  // === Occupation ===
+  {
+    id: 'occupation_improvement',
+    condition: (data) => data.ops.occupancyRatePercent < 85,
+    lever: 'Améliorer le taux d\'occupation (+5 pts)',
+    impactType: 'CA',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.03),
+      max: Math.round(data.finance.annualRevenue * 0.06),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : +5 pts d\'occupation = +3% à +6% de CA',
+      'Basé sur une élasticité linéaire de la capacité',
+      'Ne prend pas en compte les coûts marginaux associés',
+    ],
+    confidenceLevel: 'MOYEN',
+  },
+  // === HR Cost Reduction ===
+  {
+    id: 'hr_cost_reduction',
+    condition: (data) => data.costs.hrCostsPercent > 48,
+    lever: 'Optimiser les charges RH (-3 pts)',
+    impactType: 'MARGE',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.025),
+      max: Math.round(data.finance.annualRevenue * 0.035),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : réduction de 3 pts des charges RH',
+      'Impact direct sur le résultat d\'exploitation',
+      'Mise en œuvre progressive sur 6-12 mois',
+    ],
+    confidenceLevel: 'BON',
+  },
+  // === Absenteeism Reduction ===
+  {
+    id: 'absenteeism_reduction',
+    condition: (data) => (data.hr?.absenteeismRatePercent ?? 0) > 5,
+    lever: 'Réduire l\'absentéisme (-2 pts)',
+    impactType: 'COÛTS',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.01),
+      max: Math.round(data.finance.annualRevenue * 0.02),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : -2 pts d\'absentéisme = +1% à +2% de productivité',
+      'Gain sur les coûts de remplacement et heures supplémentaires',
+      'Effet indirect sur la qualité de service',
+    ],
+    confidenceLevel: 'MOYEN',
+  },
+  // === Gross Margin Improvement ===
+  {
+    id: 'gross_margin_improvement',
+    condition: (data) => data.finance.grossMarginPercent < 65,
+    lever: 'Améliorer la marge brute (+2 pts)',
+    impactType: 'MARGE',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.018),
+      max: Math.round(data.finance.annualRevenue * 0.022),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : +2 pts de marge brute',
+      'Via renégociation fournisseurs ou ajustement tarifaire',
+      'Impact direct sur le résultat',
+    ],
+    confidenceLevel: 'BON',
+  },
+  // === Digitalization ===
+  {
+    id: 'digitalization_improvement',
+    condition: (data) => data.commercial.digitalizationPercent < 60,
+    lever: 'Accélérer la digitalisation (+15 pts)',
+    impactType: 'CA',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.02),
+      max: Math.round(data.finance.annualRevenue * 0.05),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : +15 pts de digitalisation',
+      'Amélioration de l\'acquisition et de la rétention client',
+      'Réduction des coûts administratifs',
+    ],
+    confidenceLevel: 'FAIBLE',
+  },
+  // === Cash Flow Optimization ===
+  {
+    id: 'cash_optimization',
+    condition: (data) => data.finance.cashRunwayMonths !== undefined && data.finance.cashRunwayMonths < 6,
+    lever: 'Optimiser le BFR et la trésorerie',
+    impactType: 'TRÉSORERIE',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.05),
+      max: Math.round(data.finance.annualRevenue * 0.10),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : réduction du DSO de 10-15 jours',
+      'Renégociation des délais fournisseurs',
+      'Impact one-shot sur la trésorerie disponible',
+    ],
+    confidenceLevel: 'MOYEN',
+  },
+  // === Productivity per FTE ===
+  {
+    id: 'productivity_improvement',
+    condition: (data, scores) => scores.operationnel < 55,
+    lever: 'Améliorer la productivité par ETP (+10%)',
+    impactType: 'CA',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.04),
+      max: Math.round(data.finance.annualRevenue * 0.08),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : +10% de productivité par ETP',
+      'Via formation, outils, ou optimisation des processus',
+      'Sans augmentation de la masse salariale',
+    ],
+    confidenceLevel: 'MOYEN',
+  },
+  // === Turnover Reduction ===
+  {
+    id: 'turnover_reduction',
+    condition: (data) => (data.hr?.turnoverRatePercent ?? 0) > 20,
+    lever: 'Réduire le turnover (-10 pts)',
+    impactType: 'COÛTS',
+    calculateImpact: (data) => ({
+      min: Math.round(data.finance.annualRevenue * 0.015),
+      max: Math.round(data.finance.annualRevenue * 0.03),
+    }),
+    unit: '€',
+    assumptions: [
+      'Hypothèse : coût moyen d\'un départ = 6 mois de salaire',
+      'Économie sur recrutement, formation, perte de productivité',
+      'Impact progressif sur 12-18 mois',
+    ],
+    confidenceLevel: 'FAIBLE',
+  },
+];
+
+function computeQuantifiedRecommendations(
+  data: AuditDataV2,
+  scores: Scores
+): QuantifiedRecommendation[] {
+  const recommendations: QuantifiedRecommendation[] = [];
+
+  for (const rule of QUANTIFICATION_RULES) {
+    if (rule.condition(data, scores)) {
+      const impact = rule.calculateImpact(data);
+      recommendations.push({
+        lever: rule.lever,
+        impactType: rule.impactType,
+        estimatedImpactMin: impact.min,
+        estimatedImpactMax: impact.max,
+        unit: rule.unit,
+        assumptions: rule.assumptions,
+        confidenceLevel: rule.confidenceLevel,
+      });
+    }
+  }
+
+  // Sort by max impact (descending) and limit to top 5
+  return recommendations
+    .sort((a, b) => b.estimatedImpactMax - a.estimatedImpactMax)
+    .slice(0, 5);
+}
+
 // ============= Main Engine Function =============
 
 export function computeDecisionOutput(
@@ -315,6 +511,9 @@ export function computeDecisionOutput(
   // Generate summary
   const decisionSummary = generateDecisionSummary(priorityLevel, topRisks, topLevers, scores);
 
+  // Compute quantified recommendations
+  const quantifiedRecommendations = computeQuantifiedRecommendations(v2, scores);
+
   return {
     priorityLevel,
     topRisks,
@@ -322,6 +521,7 @@ export function computeDecisionOutput(
     quickWins,
     structuralActions,
     decisionSummary,
+    quantifiedRecommendations,
   };
 }
 
