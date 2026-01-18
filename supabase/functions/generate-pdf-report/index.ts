@@ -6,17 +6,17 @@ const corsHeaders = {
 };
 
 interface AuditData {
-  nom: string;
-  secteur: string;
+  nom?: string;
+  secteur?: string;
   variant?: string;
-  margebrutepct: number;
-  caannuel: number;
-  effectifetp: number;
-  chargesrhpct: number;
-  digitalpct: number;
-  fidelisationpct: number;
-  tauxoccupation: number;
-  nbservices: number;
+  margebrutepct?: number;
+  caannuel?: number;
+  effectifetp?: number;
+  chargesrhpct?: number;
+  digitalpct?: number;
+  fidelisationpct?: number;
+  tauxoccupation?: number;
+  nbservices?: number;
 }
 
 interface Scores {
@@ -27,11 +27,63 @@ interface Scores {
   strategique: number;
 }
 
+// ============ Safe Formatting Helpers ============
+
+function toNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  return isNaN(num) ? null : num;
+}
+
+function formatEUR(value: unknown): string {
+  const num = toNumber(value);
+  if (num === null) return "—";
+  return num.toLocaleString('fr-FR') + ' €';
+}
+
+function formatNumber(value: unknown): string {
+  const num = toNumber(value);
+  if (num === null) return "—";
+  return num.toLocaleString('fr-FR');
+}
+
+function formatPercent(value: unknown): string {
+  const num = toNumber(value);
+  if (num === null) return "—";
+  return num + '%';
+}
+
+function formatDecimal(value: unknown, decimals: number = 1): string {
+  const num = toNumber(value);
+  if (num === null) return "—";
+  return num.toFixed(decimals);
+}
+
+function safeCalc(value: unknown, fallback: number = 0): number {
+  const num = toNumber(value);
+  return num !== null ? num : fallback;
+}
+
+// ============ End Safe Formatting Helpers ============
+
 function getScoreLevel(score: number): { level: string; label: string; color: string } {
   if (score >= 80) return { level: 'excellent', label: 'Excellent', color: '#10b981' };
   if (score >= 60) return { level: 'bon', label: 'Bon', color: '#3b82f6' };
   if (score >= 40) return { level: 'critique', label: 'À améliorer', color: '#f59e0b' };
   return { level: 'danger', label: 'Critique', color: '#ef4444' };
+}
+
+function getMissingFields(data: AuditData): string[] {
+  const missing: string[] = [];
+  if (data?.caannuel === undefined || data?.caannuel === null) missing.push("Chiffre d'affaires annuel");
+  if (data?.margebrutepct === undefined || data?.margebrutepct === null) missing.push("Marge brute (%)");
+  if (data?.effectifetp === undefined || data?.effectifetp === null) missing.push("Effectif ETP");
+  if (data?.chargesrhpct === undefined || data?.chargesrhpct === null) missing.push("Charges RH (%)");
+  if (data?.digitalpct === undefined || data?.digitalpct === null) missing.push("Digitalisation (%)");
+  if (data?.fidelisationpct === undefined || data?.fidelisationpct === null) missing.push("Fidélisation (%)");
+  if (data?.tauxoccupation === undefined || data?.tauxoccupation === null) missing.push("Taux d'occupation");
+  if (data?.nbservices === undefined || data?.nbservices === null) missing.push("Nombre de services");
+  return missing;
 }
 
 function generateRecommendations(data: AuditData, scores: Scores): string[] {
@@ -108,15 +160,31 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
   
   const recommendations = generateRecommendations(data, scores);
   const strengths = generateStrengths(scores);
+  const missingFields = getMissingFields(data);
   
-  const caEtp = (data.caannuel / Math.max(data.effectifetp, 0.1)).toFixed(0);
+  // Safe calculations with fallbacks
+  const effectifEtp = safeCalc(data?.effectifetp, 1);
+  const caAnnuel = safeCalc(data?.caannuel, 0);
+  const caEtp = effectifEtp > 0 ? (caAnnuel / effectifEtp).toFixed(0) : "—";
+  const tauxOccupationPct = safeCalc(data?.tauxoccupation, 0) * 100;
+  
+  // Generate missing fields alert HTML if needed
+  const missingFieldsAlert = missingFields.length > 0 ? `
+    <div class="card" style="background: #fef3c7; border-left-color: #f59e0b; margin-bottom: 30px;">
+      <h3 style="color: #92400e;">⚠️ Alertes de cohérence</h3>
+      <p style="color: #92400e; margin: 10px 0;">Les champs suivants n'ont pas été renseignés. Certaines analyses peuvent être incomplètes :</p>
+      <ul style="padding-left: 20px; color: #92400e;">
+        ${missingFields.map(f => `<li>${f}</li>`).join('')}
+      </ul>
+    </div>
+  ` : '';
   
   return `
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Rapport d'Audit - ${data.nom || 'Entreprise'}</title>
+  <title>Rapport d'Audit - ${data?.nom || 'Entreprise'}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
@@ -553,10 +621,10 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <div class="cover">
       <h1>Rapport d'Audit 4D</h1>
       <div class="subtitle">Analyse complète de performance</div>
-      <div class="company">${data.nom || 'Entreprise'}</div>
-      <div class="sector">Secteur: ${data.secteur}${data.variant ? ` - ${data.variant}` : ''}</div>
+      <div class="company">${data?.nom || 'Entreprise'}</div>
+      <div class="sector">Secteur: ${data?.secteur || 'Non renseigné'}${data?.variant ? ` - ${data.variant}` : ''}</div>
       <div class="score-circle">
-        <div class="score-value">${scores.global.toFixed(1)}</div>
+        <div class="score-value">${formatDecimal(scores.global)}</div>
         <div class="score-label">${globalLevel.label}</div>
       </div>
       <p style="color: #64748b; font-size: 14px; margin-top: 40px;">
@@ -564,7 +632,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </p>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">1</div>
     </div>
   </div>
@@ -576,6 +644,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="date">${date}</div>
     </div>
     <h2>Table des Matières</h2>
+    ${missingFieldsAlert}
     <div class="section">
       <div class="toc-item"><span class="toc-title">1. Synthèse Exécutive</span><span class="toc-page">3</span></div>
       <div class="toc-item"><span class="toc-title">2. Vue d'ensemble des Scores</span><span class="toc-page">4</span></div>
@@ -590,7 +659,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="toc-item"><span class="toc-title">11. Conclusion et Prochaines Étapes</span><span class="toc-page">24</span></div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">2</div>
     </div>
   </div>
@@ -605,13 +674,13 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <div class="card">
       <h3>Résumé de l'Audit</h3>
       <p style="margin-bottom: 20px; color: #64748b;">
-        Ce rapport présente une analyse complète de la performance de <strong>${data.nom || 'votre entreprise'}</strong> 
+        Ce rapport présente une analyse complète de la performance de <strong>${data?.nom || 'votre entreprise'}</strong> 
         basée sur le modèle de scoring 4D (Financier, Opérationnel, Commercial, Stratégique) et les benchmarks 
-        sectoriels ${data.secteur}.
+        sectoriels ${data?.secteur || 'généraux'}.
       </p>
       <div style="display: flex; justify-content: center; margin: 30px 0;">
         <div class="score-circle" style="width: 150px; height: 150px;">
-          <div class="score-value" style="font-size: 42px;">${scores.global.toFixed(1)}</div>
+          <div class="score-value" style="font-size: 42px;">${formatDecimal(scores.global)}</div>
           <div class="score-label">${globalLevel.label}</div>
         </div>
       </div>
@@ -631,7 +700,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     `).join('')}
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">3</div>
     </div>
   </div>
@@ -645,31 +714,31 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>2. Vue d'ensemble des Scores</h2>
     <div class="kpi-grid">
       <div class="kpi-item">
-        <div class="kpi-value" style="color: ${financierLevel.color}">${scores.financier.toFixed(1)}</div>
+        <div class="kpi-value" style="color: ${financierLevel.color}">${formatDecimal(scores.financier)}</div>
         <div class="kpi-label">Score Financier</div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${scores.financier}%; background: ${financierLevel.color}"></div>
+          <div class="progress-fill" style="width: ${safeCalc(scores.financier)}%; background: ${financierLevel.color}"></div>
         </div>
       </div>
       <div class="kpi-item">
-        <div class="kpi-value" style="color: ${operationnelLevel.color}">${scores.operationnel.toFixed(1)}</div>
+        <div class="kpi-value" style="color: ${operationnelLevel.color}">${formatDecimal(scores.operationnel)}</div>
         <div class="kpi-label">Score Opérationnel</div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${scores.operationnel}%; background: ${operationnelLevel.color}"></div>
+          <div class="progress-fill" style="width: ${safeCalc(scores.operationnel)}%; background: ${operationnelLevel.color}"></div>
         </div>
       </div>
       <div class="kpi-item">
-        <div class="kpi-value" style="color: ${commercialLevel.color}">${scores.commercial.toFixed(1)}</div>
+        <div class="kpi-value" style="color: ${commercialLevel.color}">${formatDecimal(scores.commercial)}</div>
         <div class="kpi-label">Score Commercial</div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${scores.commercial}%; background: ${commercialLevel.color}"></div>
+          <div class="progress-fill" style="width: ${safeCalc(scores.commercial)}%; background: ${commercialLevel.color}"></div>
         </div>
       </div>
       <div class="kpi-item">
-        <div class="kpi-value" style="color: ${strategiqueLevel.color}">${scores.strategique.toFixed(1)}</div>
+        <div class="kpi-value" style="color: ${strategiqueLevel.color}">${formatDecimal(scores.strategique)}</div>
         <div class="kpi-label">Score Stratégique</div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${scores.strategique}%; background: ${strategiqueLevel.color}"></div>
+          <div class="progress-fill" style="width: ${safeCalc(scores.strategique)}%; background: ${strategiqueLevel.color}"></div>
         </div>
       </div>
     </div>
@@ -693,7 +762,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">4</div>
     </div>
   </div>
@@ -709,49 +778,49 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <h3>Informations Générales</h3>
       <div class="metric-row">
         <span class="metric-label">Nom de l'entreprise</span>
-        <span class="metric-value">${data.nom || 'Non renseigné'}</span>
+        <span class="metric-value">${data?.nom || 'Non renseigné'}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Secteur d'activité</span>
-        <span class="metric-value">${data.secteur}</span>
+        <span class="metric-value">${data?.secteur || 'Non renseigné'}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Variante sectorielle</span>
-        <span class="metric-value">${data.variant || 'Standard'}</span>
+        <span class="metric-value">${data?.variant || 'Standard'}</span>
       </div>
     </div>
     <div class="dimension-detail">
       <h3>Données Financières</h3>
       <div class="metric-row">
         <span class="metric-label">Chiffre d'affaires annuel</span>
-        <span class="metric-value">${data.caannuel.toLocaleString('fr-FR')} €</span>
+        <span class="metric-value">${formatEUR(data?.caannuel)}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Marge brute</span>
-        <span class="metric-value">${data.margebrutepct}%</span>
+        <span class="metric-value">${formatPercent(data?.margebrutepct)}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Charges RH</span>
-        <span class="metric-value">${data.chargesrhpct}%</span>
+        <span class="metric-value">${formatPercent(data?.chargesrhpct)}</span>
       </div>
     </div>
     <div class="dimension-detail">
       <h3>Données Opérationnelles</h3>
       <div class="metric-row">
         <span class="metric-label">Effectif (ETP)</span>
-        <span class="metric-value">${data.effectifetp}</span>
+        <span class="metric-value">${formatNumber(data?.effectifetp)}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">CA par ETP</span>
-        <span class="metric-value">${parseInt(caEtp).toLocaleString('fr-FR')} €</span>
+        <span class="metric-value">${caEtp !== "—" ? formatNumber(parseInt(caEtp)) + ' €' : '—'}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Taux d'occupation</span>
-        <span class="metric-value">${(data.tauxoccupation * 100).toFixed(0)}%</span>
+        <span class="metric-value">${data?.tauxoccupation !== undefined ? formatDecimal(tauxOccupationPct, 0) + '%' : '—'}</span>
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">5</div>
     </div>
   </div>
@@ -767,7 +836,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="dimension-header">
         <h3>Score Financier</h3>
         <div class="dimension-score" style="background: ${financierLevel.color}20; border: 3px solid ${financierLevel.color};">
-          <div class="dimension-score-value" style="color: ${financierLevel.color}">${scores.financier.toFixed(1)}</div>
+          <div class="dimension-score-value" style="color: ${financierLevel.color}">${formatDecimal(scores.financier)}</div>
         </div>
       </div>
       <span class="benchmark-indicator benchmark-${financierLevel.level}">${financierLevel.label}</span>
@@ -786,25 +855,25 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
       <tr>
         <td>Marge Brute</td>
-        <td><strong>${data.margebrutepct}%</strong></td>
+        <td><strong>${formatPercent(data?.margebrutepct)}</strong></td>
         <td>70%</td>
         <td>75%</td>
       </tr>
       <tr>
         <td>CA par ETP</td>
-        <td><strong>${parseInt(caEtp).toLocaleString('fr-FR')} €</strong></td>
+        <td><strong>${caEtp !== "—" ? formatNumber(parseInt(caEtp)) + ' €' : '—'}</strong></td>
         <td>100 000 €</td>
         <td>130 000 €</td>
       </tr>
       <tr>
         <td>Charges RH</td>
-        <td><strong>${data.chargesrhpct}%</strong></td>
+        <td><strong>${formatPercent(data?.chargesrhpct)}</strong></td>
         <td>≤55%</td>
         <td>≤50%</td>
       </tr>
     </table>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">6</div>
     </div>
   </div>
@@ -818,9 +887,9 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>4. Analyse Financière (suite)</h2>
     <h3>Analyse de la Marge Brute</h3>
     <div class="card">
-      <p>Votre marge brute de <strong>${data.margebrutepct}%</strong> ${data.margebrutepct >= 70 ? 'atteint' : 'n\'atteint pas encore'} le seuil de performance.</p>
+      <p>Votre marge brute de <strong>${formatPercent(data?.margebrutepct)}</strong> ${safeCalc(data?.margebrutepct) >= 70 ? 'atteint' : 'n\'atteint pas encore'} le seuil de performance.</p>
       <div class="progress-bar" style="margin-top: 16px;">
-        <div class="progress-fill" style="width: ${Math.min(data.margebrutepct, 100)}%; background: ${data.margebrutepct >= 75 ? '#10b981' : data.margebrutepct >= 70 ? '#3b82f6' : '#f59e0b'}"></div>
+        <div class="progress-fill" style="width: ${Math.min(safeCalc(data?.margebrutepct), 100)}%; background: ${safeCalc(data?.margebrutepct) >= 75 ? '#10b981' : safeCalc(data?.margebrutepct) >= 70 ? '#3b82f6' : '#f59e0b'}"></div>
       </div>
       <div class="analysis-box" style="margin-top: 16px;">
         <p><strong>Leviers d'amélioration :</strong></p>
@@ -833,7 +902,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     </div>
     <h3>Productivité par ETP</h3>
     <div class="card">
-      <p>Le chiffre d'affaires par ETP s'élève à <strong>${parseInt(caEtp).toLocaleString('fr-FR')} €</strong>.</p>
+      <p>Le chiffre d'affaires par ETP s'élève à <strong>${caEtp !== "—" ? formatNumber(parseInt(caEtp)) + ' €' : '—'}</strong>.</p>
       <div class="analysis-box" style="margin-top: 16px;">
         <p><strong>Facteurs d'influence :</strong></p>
         <ul style="margin-top: 10px; padding-left: 20px;">
@@ -844,7 +913,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">7</div>
     </div>
   </div>
@@ -858,9 +927,9 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>4. Analyse Financière (fin)</h2>
     <h3>Structure des Charges RH</h3>
     <div class="card">
-      <p>Les charges RH représentent <strong>${data.chargesrhpct}%</strong> du chiffre d'affaires.</p>
+      <p>Les charges RH représentent <strong>${formatPercent(data?.chargesrhpct)}</strong> du chiffre d'affaires.</p>
       <div class="progress-bar" style="margin-top: 16px;">
-        <div class="progress-fill" style="width: ${Math.min(data.chargesrhpct, 100)}%; background: ${data.chargesrhpct <= 50 ? '#10b981' : data.chargesrhpct <= 55 ? '#3b82f6' : '#f59e0b'}"></div>
+        <div class="progress-fill" style="width: ${Math.min(safeCalc(data?.chargesrhpct), 100)}%; background: ${safeCalc(data?.chargesrhpct) <= 50 ? '#10b981' : safeCalc(data?.chargesrhpct) <= 55 ? '#3b82f6' : '#f59e0b'}"></div>
       </div>
     </div>
     <div class="dimension-detail">
@@ -886,7 +955,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       `}
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">8</div>
     </div>
   </div>
@@ -902,7 +971,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="dimension-header">
         <h3>Score Opérationnel</h3>
         <div class="dimension-score" style="background: ${operationnelLevel.color}20; border: 3px solid ${operationnelLevel.color};">
-          <div class="dimension-score-value" style="color: ${operationnelLevel.color}">${scores.operationnel.toFixed(1)}</div>
+          <div class="dimension-score-value" style="color: ${operationnelLevel.color}">${formatDecimal(scores.operationnel)}</div>
         </div>
       </div>
       <span class="benchmark-indicator benchmark-${operationnelLevel.level}">${operationnelLevel.label}</span>
@@ -915,16 +984,16 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <div class="card">
       <div style="text-align: center; padding: 30px 0;">
         <div style="font-size: 64px; font-weight: 800; color: ${operationnelLevel.color};">
-          ${(data.tauxoccupation * 100).toFixed(0)}%
+          ${data?.tauxoccupation !== undefined ? formatDecimal(tauxOccupationPct, 0) + '%' : '—'}
         </div>
         <p style="color: #64748b; margin-top: 10px;">Taux d'occupation actuel</p>
       </div>
       <div class="progress-bar">
-        <div class="progress-fill" style="width: ${data.tauxoccupation * 100}%; background: ${operationnelLevel.color}"></div>
+        <div class="progress-fill" style="width: ${tauxOccupationPct}%; background: ${operationnelLevel.color}"></div>
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">9</div>
     </div>
   </div>
@@ -945,41 +1014,34 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
       <tr>
         <td><span class="benchmark-indicator benchmark-excellent">Excellent</span></td>
-        <td>≥95%</td>
-        <td>Capacité optimisée, attention à la surcharge</td>
+        <td>≥85%</td>
+        <td>Optimisation maximale des ressources</td>
       </tr>
       <tr>
         <td><span class="benchmark-indicator benchmark-bon">Bon</span></td>
-        <td>85-94%</td>
-        <td>Bonne utilisation des ressources</td>
+        <td>70-85%</td>
+        <td>Utilisation satisfaisante</td>
       </tr>
       <tr>
         <td><span class="benchmark-indicator benchmark-critique">À améliorer</span></td>
-        <td>75-84%</td>
-        <td>Marge d'optimisation possible</td>
+        <td>50-70%</td>
+        <td>Marge de progression significative</td>
       </tr>
       <tr>
         <td><span class="benchmark-indicator benchmark-danger">Critique</span></td>
-        <td>&lt;75%</td>
-        <td>Sous-utilisation des ressources</td>
+        <td>&lt;50%</td>
+        <td>Sous-utilisation importante</td>
       </tr>
     </table>
     <div class="card" style="margin-top: 30px;">
-      <h3>Impact Économique</h3>
-      <p>Chaque point de taux d'occupation supplémentaire peut représenter :</p>
-      <div class="kpi-grid" style="margin-top: 20px;">
-        <div class="kpi-item">
-          <div class="kpi-value" style="font-size: 24px;">${(data.caannuel * 0.01).toLocaleString('fr-FR')} €</div>
-          <div class="kpi-label">CA potentiel / point</div>
-        </div>
-        <div class="kpi-item">
-          <div class="kpi-value" style="font-size: 24px;">${((100 - data.tauxoccupation * 100) * data.caannuel * 0.01).toLocaleString('fr-FR')} €</div>
-          <div class="kpi-label">Potentiel non exploité</div>
-        </div>
-      </div>
+      <h3>Impact sur la Rentabilité</h3>
+      <p style="color: #64748b;">
+        Chaque point de taux d'occupation supplémentaire représente une amélioration directe 
+        de la productivité et du chiffre d'affaires potentiel.
+      </p>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">10</div>
     </div>
   </div>
@@ -991,11 +1053,11 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="date">${date}</div>
     </div>
     <h2>5. Performance Opérationnelle (fin)</h2>
-    <h3>Leviers d'Optimisation Opérationnelle</h3>
-    <div class="card">
-      <div class="action-priority priority-medium">
+    <h3>Recommandations Opérationnelles</h3>
+    <div class="dimension-detail">
+      <div class="action-priority priority-high">
         <strong>📅</strong>
-        <span>Optimisation de la prise de rendez-vous en ligne</span>
+        <span>Optimisation du planning et des créneaux de rendez-vous</span>
       </div>
       <div class="action-priority priority-medium">
         <strong>⏱️</strong>
@@ -1032,7 +1094,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </table>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">11</div>
     </div>
   </div>
@@ -1048,7 +1110,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="dimension-header">
         <h3>Score Commercial</h3>
         <div class="dimension-score" style="background: ${commercialLevel.color}20; border: 3px solid ${commercialLevel.color};">
-          <div class="dimension-score-value" style="color: ${commercialLevel.color}">${scores.commercial.toFixed(1)}</div>
+          <div class="dimension-score-value" style="color: ${commercialLevel.color}">${formatDecimal(scores.commercial)}</div>
         </div>
       </div>
       <span class="benchmark-indicator benchmark-${commercialLevel.level}">${commercialLevel.label}</span>
@@ -1059,22 +1121,22 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     </div>
     <div class="kpi-grid">
       <div class="kpi-item">
-        <div class="kpi-value">${data.digitalpct}%</div>
+        <div class="kpi-value">${formatPercent(data?.digitalpct)}</div>
         <div class="kpi-label">Taux de Digitalisation</div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${data.digitalpct}%; background: ${data.digitalpct >= 80 ? '#10b981' : '#f59e0b'}"></div>
+          <div class="progress-fill" style="width: ${safeCalc(data?.digitalpct)}%; background: ${safeCalc(data?.digitalpct) >= 80 ? '#10b981' : '#f59e0b'}"></div>
         </div>
       </div>
       <div class="kpi-item">
-        <div class="kpi-value">${data.fidelisationpct}%</div>
+        <div class="kpi-value">${formatPercent(data?.fidelisationpct)}</div>
         <div class="kpi-label">Taux de Fidélisation</div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: ${data.fidelisationpct}%; background: ${data.fidelisationpct >= 85 ? '#10b981' : '#f59e0b'}"></div>
+          <div class="progress-fill" style="width: ${safeCalc(data?.fidelisationpct)}%; background: ${safeCalc(data?.fidelisationpct) >= 85 ? '#10b981' : '#f59e0b'}"></div>
         </div>
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">12</div>
     </div>
   </div>
@@ -1088,7 +1150,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>6. Dimension Commerciale (suite)</h2>
     <h3>Maturité Digitale</h3>
     <div class="card">
-      <p>Votre taux de digitalisation de <strong>${data.digitalpct}%</strong> indique une ${data.digitalpct >= 80 ? 'excellente' : data.digitalpct >= 60 ? 'bonne' : 'marge de'} maturité digitale.</p>
+      <p>Votre taux de digitalisation de <strong>${formatPercent(data?.digitalpct)}</strong> indique une ${safeCalc(data?.digitalpct) >= 80 ? 'excellente' : safeCalc(data?.digitalpct) >= 60 ? 'bonne' : 'marge de'} maturité digitale.</p>
       <div class="analysis-box" style="margin-top: 16px;">
         <p><strong>Composantes évaluées :</strong></p>
         <ul style="margin-top: 10px; padding-left: 20px;">
@@ -1101,7 +1163,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     </div>
     <h3>Fidélisation Client</h3>
     <div class="card">
-      <p>Votre taux de fidélisation de <strong>${data.fidelisationpct}%</strong> ${data.fidelisationpct >= 85 ? 'est excellent' : data.fidelisationpct >= 70 ? 'est satisfaisant' : 'peut être amélioré'}.</p>
+      <p>Votre taux de fidélisation de <strong>${formatPercent(data?.fidelisationpct)}</strong> ${safeCalc(data?.fidelisationpct) >= 85 ? 'est excellent' : safeCalc(data?.fidelisationpct) >= 70 ? 'est satisfaisant' : 'peut être amélioré'}.</p>
       <div class="analysis-box" style="margin-top: 16px;">
         <p><strong>Leviers de fidélisation :</strong></p>
         <ul style="margin-top: 10px; padding-left: 20px;">
@@ -1113,7 +1175,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">13</div>
     </div>
   </div>
@@ -1157,19 +1219,19 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
       <tr>
         <td>Digitalisation</td>
-        <td>${data.digitalpct}%</td>
+        <td>${formatPercent(data?.digitalpct)}</td>
         <td>90%</td>
-        <td>${Math.max(0, 90 - data.digitalpct)}%</td>
+        <td>${Math.max(0, 90 - safeCalc(data?.digitalpct))}%</td>
       </tr>
       <tr>
         <td>Fidélisation</td>
-        <td>${data.fidelisationpct}%</td>
+        <td>${formatPercent(data?.fidelisationpct)}</td>
         <td>90%</td>
-        <td>${Math.max(0, 90 - data.fidelisationpct)}%</td>
+        <td>${Math.max(0, 90 - safeCalc(data?.fidelisationpct))}%</td>
       </tr>
     </table>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">14</div>
     </div>
   </div>
@@ -1185,7 +1247,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="dimension-header">
         <h3>Score Stratégique</h3>
         <div class="dimension-score" style="background: ${strategiqueLevel.color}20; border: 3px solid ${strategiqueLevel.color};">
-          <div class="dimension-score-value" style="color: ${strategiqueLevel.color}">${scores.strategique.toFixed(1)}</div>
+          <div class="dimension-score-value" style="color: ${strategiqueLevel.color}">${formatDecimal(scores.strategique)}</div>
         </div>
       </div>
       <span class="benchmark-indicator benchmark-${strategiqueLevel.level}">${strategiqueLevel.label}</span>
@@ -1198,13 +1260,13 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <div class="card">
       <div style="text-align: center; padding: 30px 0;">
         <div style="font-size: 64px; font-weight: 800; color: ${strategiqueLevel.color};">
-          ${data.nbservices}
+          ${formatNumber(data?.nbservices)}
         </div>
         <p style="color: #64748b; margin-top: 10px;">Services/Produits proposés</p>
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">15</div>
     </div>
   </div>
@@ -1218,7 +1280,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>7. Vision Stratégique (suite)</h2>
     <h3>Analyse de l'Offre</h3>
     <div class="card">
-      <p>Avec <strong>${data.nbservices} services/produits</strong>, votre offre ${data.nbservices >= 5 ? 'est bien diversifiée' : data.nbservices >= 3 ? 'couvre les besoins essentiels' : 'gagnerait à être élargie'}.</p>
+      <p>Avec <strong>${formatNumber(data?.nbservices)} services/produits</strong>, votre offre ${safeCalc(data?.nbservices) >= 5 ? 'est bien diversifiée' : safeCalc(data?.nbservices) >= 3 ? 'couvre les besoins essentiels' : 'gagnerait à être élargie'}.</p>
       <div class="analysis-box" style="margin-top: 16px;">
         <p><strong>Bénéfices d'une offre diversifiée :</strong></p>
         <ul style="margin-top: 10px; padding-left: 20px;">
@@ -1238,8 +1300,8 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
       <tr>
         <td>Diversification</td>
-        <td><span class="benchmark-indicator benchmark-${data.nbservices >= 5 ? 'excellent' : data.nbservices >= 3 ? 'bon' : 'critique'}">${data.nbservices >= 5 ? 'Fort' : data.nbservices >= 3 ? 'Moyen' : 'Faible'}</span></td>
-        <td>${data.nbservices} services</td>
+        <td><span class="benchmark-indicator benchmark-${safeCalc(data?.nbservices) >= 5 ? 'excellent' : safeCalc(data?.nbservices) >= 3 ? 'bon' : 'critique'}">${safeCalc(data?.nbservices) >= 5 ? 'Fort' : safeCalc(data?.nbservices) >= 3 ? 'Moyen' : 'Faible'}</span></td>
+        <td>${formatNumber(data?.nbservices)} services</td>
       </tr>
       <tr>
         <td>Innovation</td>
@@ -1253,7 +1315,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
     </table>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">16</div>
     </div>
   </div>
@@ -1289,7 +1351,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </ol>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">17</div>
     </div>
   </div>
@@ -1302,10 +1364,10 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     </div>
     <h2>8. Benchmarks Sectoriels</h2>
     <div class="card">
-      <h3>Référentiel ${data.secteur}</h3>
+      <h3>Référentiel ${data?.secteur || 'Général'}</h3>
       <p style="color: #64748b; margin-bottom: 20px;">
         Les benchmarks utilisés sont issus d'études sectorielles actualisées 
-        et adaptés à la variante "${data.variant || 'standard'}".
+        et adaptés à la variante "${data?.variant || 'standard'}".
       </p>
     </div>
     <h3>Indicateurs Financiers</h3>
@@ -1322,21 +1384,21 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
         <td>&lt;55%</td>
         <td>70%</td>
         <td>≥75%</td>
-        <td><strong>${data.margebrutepct}%</strong></td>
+        <td><strong>${formatPercent(data?.margebrutepct)}</strong></td>
       </tr>
       <tr>
         <td>CA/ETP</td>
         <td>&lt;70k€</td>
         <td>100k€</td>
         <td>≥130k€</td>
-        <td><strong>${parseInt(caEtp).toLocaleString('fr-FR')}€</strong></td>
+        <td><strong>${caEtp !== "—" ? formatNumber(parseInt(caEtp)) + '€' : '—'}</strong></td>
       </tr>
       <tr>
         <td>Charges RH</td>
         <td>&gt;70%</td>
         <td>≤55%</td>
         <td>≤50%</td>
-        <td><strong>${data.chargesrhpct}%</strong></td>
+        <td><strong>${formatPercent(data?.chargesrhpct)}</strong></td>
       </tr>
     </table>
     <h3 style="margin-top: 30px;">Indicateurs Commerciaux</h3>
@@ -1353,18 +1415,18 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
         <td>&lt;30%</td>
         <td>80%</td>
         <td>≥95%</td>
-        <td><strong>${data.digitalpct}%</strong></td>
+        <td><strong>${formatPercent(data?.digitalpct)}</strong></td>
       </tr>
       <tr>
         <td>Fidélisation</td>
         <td>&lt;60%</td>
         <td>85%</td>
         <td>≥92%</td>
-        <td><strong>${data.fidelisationpct}%</strong></td>
+        <td><strong>${formatPercent(data?.fidelisationpct)}</strong></td>
       </tr>
     </table>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">18</div>
     </div>
   </div>
@@ -1408,12 +1470,12 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </p>
       <ul style="margin-top: 10px; padding-left: 20px; color: #64748b;">
         <li>Données sectorielles actualisées (v2.1)</li>
-        <li>Pondération adaptée au secteur ${data.secteur}</li>
+        <li>Pondération adaptée au secteur ${data?.secteur || 'général'}</li>
         <li>Comparaison avec les meilleures pratiques</li>
       </ul>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">19</div>
     </div>
   </div>
@@ -1457,19 +1519,19 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
         <span>Mise en place d'un tableau de bord de pilotage</span>
       </div>
     </div>
-    <h3>Actions à Moyen Terme (3-6 mois)</h3>
+    <h3>Actions à Moyen Terme (3-12 mois)</h3>
     <div class="dimension-detail">
       <div class="action-priority priority-medium">
         <strong>🎓</strong>
-        <span>Formation des équipes aux nouvelles pratiques</span>
+        <span>Formation continue des équipes</span>
       </div>
-      <div class="action-priority priority-medium">
-        <strong>🤝</strong>
-        <span>Mise en place d'un programme de fidélisation structuré</span>
+      <div class="action-priority priority-low">
+        <strong>📈</strong>
+        <span>Développement de nouveaux services</span>
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">20</div>
     </div>
   </div>
@@ -1481,21 +1543,6 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="date">${date}</div>
     </div>
     <h2>9. Plan d'Actions Prioritaires (fin)</h2>
-    <h3>Actions à Long Terme (6-12 mois)</h3>
-    <div class="dimension-detail">
-      <div class="action-priority priority-low">
-        <strong>🚀</strong>
-        <span>Développement de nouveaux services/produits</span>
-      </div>
-      <div class="action-priority priority-low">
-        <strong>📈</strong>
-        <span>Expansion du marché et développement commercial</span>
-      </div>
-      <div class="action-priority priority-low">
-        <strong>🔄</strong>
-        <span>Révision stratégique et ajustement du positionnement</span>
-      </div>
-    </div>
     <h3>Calendrier de Mise en Œuvre</h3>
     <table class="table">
       <tr>
@@ -1524,7 +1571,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
     </table>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">21</div>
     </div>
   </div>
@@ -1562,7 +1609,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </ul>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">22</div>
     </div>
   </div>
@@ -1606,7 +1653,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </ul>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">23</div>
     </div>
   </div>
@@ -1620,12 +1667,12 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>11. Conclusion et Prochaines Étapes</h2>
     <div class="card" style="text-align: center; padding: 40px;">
       <div class="score-circle" style="margin: 0 auto 30px;">
-        <div class="score-value">${scores.global.toFixed(1)}</div>
+        <div class="score-value">${formatDecimal(scores.global)}</div>
         <div class="score-label">${globalLevel.label}</div>
       </div>
-      <h3 style="margin-bottom: 20px;">Score Global : ${scores.global.toFixed(1)}/100</h3>
+      <h3 style="margin-bottom: 20px;">Score Global : ${formatDecimal(scores.global)}/100</h3>
       <p style="color: #64748b; max-width: 500px; margin: 0 auto;">
-        ${data.nom || 'Votre entreprise'} présente un profil ${globalLevel.label.toLowerCase()} 
+        ${data?.nom || 'Votre entreprise'} présente un profil ${globalLevel.label.toLowerCase()} 
         avec des axes d'amélioration identifiés et des points forts à capitaliser.
       </p>
     </div>
@@ -1658,7 +1705,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </p>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
       <div class="page-number">24</div>
     </div>
   </div>
@@ -1675,18 +1722,36 @@ serve(async (req) => {
   }
 
   try {
-    const { auditData, scores } = await req.json();
+    const body = await req.json();
+    const { auditData, scores } = body;
 
-    if (!auditData || !scores) {
+    // Validate required fields
+    if (!auditData) {
       return new Response(
-        JSON.stringify({ error: 'Missing auditData or scores' }),
+        JSON.stringify({ error: 'Missing auditData in request body' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Generating PDF report for:', auditData.nom);
+    if (!scores) {
+      return new Response(
+        JSON.stringify({ error: 'Missing scores in request body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate scores have required properties with defaults
+    const validatedScores: Scores = {
+      global: toNumber(scores?.global) ?? 0,
+      financier: toNumber(scores?.financier) ?? 0,
+      operationnel: toNumber(scores?.operationnel) ?? 0,
+      commercial: toNumber(scores?.commercial) ?? 0,
+      strategique: toNumber(scores?.strategique) ?? 0,
+    };
+
+    console.log('Generating PDF report for:', auditData?.nom || 'Unknown company');
     
-    const htmlContent = generateHTMLReport(auditData, scores);
+    const htmlContent = generateHTMLReport(auditData, validatedScores);
 
     // Return HTML content that can be converted to PDF on the client side
     return new Response(
