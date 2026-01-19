@@ -6,6 +6,7 @@ import { PDFDownloadButton } from '@/components/PDFDownloadButton';
 import { EmailPdfButton } from '@/components/EmailPdfButton';
 import { WarningsDisplay } from '@/components/WarningsDisplay';
 import { DecisionPanel } from '@/components/DecisionPanel';
+import { SimulationModule } from '@/components/SimulationModule';
 import { useAudit } from '@/hooks/useAudit';
 import { TrendingUp, Users, ShoppingCart, Target, BarChart3 } from 'lucide-react';
 
@@ -106,6 +107,13 @@ const Index = () => {
               <div className="max-w-2xl mx-auto">
                 <RadarChartDisplay scores={scores} />
               </div>
+              
+              {/* Simulation Module */}
+              {auditData && (
+                <div className="max-w-5xl mx-auto pt-8 border-t border-border">
+                  <SimulationModule auditData={auditData} scores={scores} />
+                </div>
+              )}
             </div>
           </div>
         </section>
