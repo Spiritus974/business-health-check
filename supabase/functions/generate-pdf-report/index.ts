@@ -5,7 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============ Extended AuditData Interface (V1 + V2 compatible) ============
 interface AuditData {
+  // V1 fields (legacy)
   nom?: string;
   secteur?: string;
   variant?: string;
@@ -17,6 +19,71 @@ interface AuditData {
   fidelisationpct?: number;
   tauxoccupation?: number;
   nbservices?: number;
+  
+  // V2 fields (new structure)
+  businessName?: string;
+  sector?: string;
+  sectorVariant?: string;
+  dataOrigin?: string;
+  
+  // Finance
+  finance?: {
+    caAnnuel?: number;
+    margeBrutePct?: number;
+    tresorerieNette?: number;
+    dettesLongTerme?: number;
+    chargesFixesMensuelles?: number;
+  };
+  
+  // Costs
+  costs?: {
+    chargesRhPct?: number;
+    chargesFixes?: number;
+    chargesVariables?: number;
+  };
+  
+  // Productivity
+  productivity?: {
+    effectifETP?: number;
+    revenuePerFte?: number;
+  };
+  
+  // Quality
+  quality?: {
+    tauxAbsenteisme?: number;
+    turnoverAnnuel?: number;
+    tauxReclamation?: number;
+    npsScore?: number;
+  };
+  
+  // Ops
+  ops?: {
+    tauxOccupation?: number;
+    nbServices?: number;
+    tempsServiceMoyen?: number;
+  };
+  
+  // HR
+  hr?: {
+    effectifTotal?: number;
+    ancienneteMoyenne?: number;
+    formationHeuresAn?: number;
+  };
+  
+  // Satisfaction
+  satisfaction?: {
+    tauxFidelisation?: number;
+    avisMoyenGoogle?: number;
+    tauxReponseAvis?: number;
+  };
+  
+  // Commercial
+  commercial?: {
+    digitalPct?: number;
+    fidelisationPct?: number;
+    panierMoyen?: number;
+    freqVisiteMois?: number;
+  };
 }
 
 interface Scores {
@@ -66,6 +133,64 @@ function safeCalc(value: unknown, fallback: number = 0): number {
 
 // ============ End Safe Formatting Helpers ============
 
+// ============ Data Normalization (V1 ↔ V2) ============
+
+interface NormalizedData {
+  nom: string;
+  secteur: string;
+  variant: string;
+  caAnnuel: number | null;
+  margeBrutePct: number | null;
+  effectifETP: number | null;
+  chargesRhPct: number | null;
+  digitalPct: number | null;
+  fidelisationPct: number | null;
+  tauxOccupation: number | null;
+  nbServices: number | null;
+  // Extended V2 fields
+  tresorerieNette: number | null;
+  tauxAbsenteisme: number | null;
+  turnoverAnnuel: number | null;
+  panierMoyen: number | null;
+  npsScore: number | null;
+}
+
+function normalizeAuditData(data: AuditData): NormalizedData {
+  // Priority: V2 nested fields > V1 flat fields
+  return {
+    nom: data?.businessName || data?.nom || 'Entreprise',
+    secteur: data?.sector || data?.secteur || 'Non renseigné',
+    variant: data?.sectorVariant || data?.variant || 'Standard',
+    
+    // Finance - V2 first, fallback to V1
+    caAnnuel: toNumber(data?.finance?.caAnnuel) ?? toNumber(data?.caannuel),
+    margeBrutePct: toNumber(data?.finance?.margeBrutePct) ?? toNumber(data?.margebrutepct),
+    tresorerieNette: toNumber(data?.finance?.tresorerieNette),
+    
+    // HR & Costs
+    effectifETP: toNumber(data?.productivity?.effectifETP) ?? toNumber(data?.effectifetp),
+    chargesRhPct: toNumber(data?.costs?.chargesRhPct) ?? toNumber(data?.chargesrhpct),
+    
+    // Operations
+    tauxOccupation: toNumber(data?.ops?.tauxOccupation) ?? toNumber(data?.tauxoccupation),
+    nbServices: toNumber(data?.ops?.nbServices) ?? toNumber(data?.nbservices),
+    
+    // Commercial
+    digitalPct: toNumber(data?.commercial?.digitalPct) ?? toNumber(data?.digitalpct),
+    fidelisationPct: toNumber(data?.satisfaction?.tauxFidelisation) ?? 
+                     toNumber(data?.commercial?.fidelisationPct) ?? 
+                     toNumber(data?.fidelisationpct),
+    panierMoyen: toNumber(data?.commercial?.panierMoyen),
+    
+    // Quality
+    tauxAbsenteisme: toNumber(data?.quality?.tauxAbsenteisme),
+    turnoverAnnuel: toNumber(data?.quality?.turnoverAnnuel),
+    npsScore: toNumber(data?.quality?.npsScore),
+  };
+}
+
+// ============ End Data Normalization ============
+
 function getScoreLevel(score: number): { level: string; label: string; color: string } {
   if (score >= 80) return { level: 'excellent', label: 'Excellent', color: '#10b981' };
   if (score >= 60) return { level: 'bon', label: 'Bon', color: '#3b82f6' };
@@ -73,16 +198,19 @@ function getScoreLevel(score: number): { level: string; label: string; color: st
   return { level: 'danger', label: 'Critique', color: '#ef4444' };
 }
 
-function getMissingFields(data: AuditData): string[] {
+function getMissingFields(normalized: NormalizedData): string[] {
   const missing: string[] = [];
-  if (data?.caannuel === undefined || data?.caannuel === null) missing.push("Chiffre d'affaires annuel");
-  if (data?.margebrutepct === undefined || data?.margebrutepct === null) missing.push("Marge brute (%)");
-  if (data?.effectifetp === undefined || data?.effectifetp === null) missing.push("Effectif ETP");
-  if (data?.chargesrhpct === undefined || data?.chargesrhpct === null) missing.push("Charges RH (%)");
-  if (data?.digitalpct === undefined || data?.digitalpct === null) missing.push("Digitalisation (%)");
-  if (data?.fidelisationpct === undefined || data?.fidelisationpct === null) missing.push("Fidélisation (%)");
-  if (data?.tauxoccupation === undefined || data?.tauxoccupation === null) missing.push("Taux d'occupation");
-  if (data?.nbservices === undefined || data?.nbservices === null) missing.push("Nombre de services");
+  
+  // Critical fields
+  if (normalized.caAnnuel === null) missing.push("Chiffre d'affaires annuel");
+  if (normalized.margeBrutePct === null) missing.push("Marge brute (%)");
+  if (normalized.effectifETP === null) missing.push("Effectif ETP");
+  if (normalized.chargesRhPct === null) missing.push("Charges RH (%)");
+  if (normalized.digitalPct === null) missing.push("Digitalisation (%)");
+  if (normalized.fidelisationPct === null) missing.push("Fidélisation (%)");
+  if (normalized.tauxOccupation === null) missing.push("Taux d'occupation");
+  if (normalized.nbServices === null) missing.push("Nombre de services");
+  
   return missing;
 }
 
@@ -146,6 +274,9 @@ function generateStrengths(scores: Scores): string[] {
 }
 
 function generateHTMLReport(data: AuditData, scores: Scores): string {
+  // CRITICAL: Normalize data first for V1/V2 compatibility
+  const n = normalizeAuditData(data);
+  
   const date = new Date().toLocaleDateString('fr-FR', { 
     year: 'numeric', 
     month: 'long', 
@@ -160,13 +291,13 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
   
   const recommendations = generateRecommendations(data, scores);
   const strengths = generateStrengths(scores);
-  const missingFields = getMissingFields(data);
+  const missingFields = getMissingFields(n);
   
-  // Safe calculations with fallbacks
-  const effectifEtp = safeCalc(data?.effectifetp, 1);
-  const caAnnuel = safeCalc(data?.caannuel, 0);
+  // Safe calculations with normalized data
+  const effectifEtp = n.effectifETP ?? 1;
+  const caAnnuel = n.caAnnuel ?? 0;
   const caEtp = effectifEtp > 0 ? (caAnnuel / effectifEtp).toFixed(0) : "—";
-  const tauxOccupationPct = safeCalc(data?.tauxoccupation, 0) * 100;
+  const tauxOccupationPct = (n.tauxOccupation ?? 0) * 100;
   
   // Generate missing fields alert HTML if needed
   const missingFieldsAlert = missingFields.length > 0 ? `
@@ -184,7 +315,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Rapport d'Audit - ${data?.nom || 'Entreprise'}</title>
+  <title>Rapport d'Audit - ${n.nom}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
@@ -621,8 +752,8 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <div class="cover">
       <h1>Rapport d'Audit 4D</h1>
       <div class="subtitle">Analyse complète de performance</div>
-      <div class="company">${data?.nom || 'Entreprise'}</div>
-      <div class="sector">Secteur: ${data?.secteur || 'Non renseigné'}${data?.variant ? ` - ${data.variant}` : ''}</div>
+      <div class="company">${n.nom}</div>
+      <div class="sector">Secteur: ${n.secteur}${n.variant !== 'Standard' ? ` - ${n.variant}` : ''}</div>
       <div class="score-circle">
         <div class="score-value">${formatDecimal(scores.global)}</div>
         <div class="score-label">${globalLevel.label}</div>
@@ -632,7 +763,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </p>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">1</div>
     </div>
   </div>
@@ -659,7 +790,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <div class="toc-item"><span class="toc-title">11. Conclusion et Prochaines Étapes</span><span class="toc-page">24</span></div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">2</div>
     </div>
   </div>
@@ -674,9 +805,9 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <div class="card">
       <h3>Résumé de l'Audit</h3>
       <p style="margin-bottom: 20px; color: #64748b;">
-        Ce rapport présente une analyse complète de la performance de <strong>${data?.nom || 'votre entreprise'}</strong> 
+        Ce rapport présente une analyse complète de la performance de <strong>${n.nom}</strong> 
         basée sur le modèle de scoring 4D (Financier, Opérationnel, Commercial, Stratégique) et les benchmarks 
-        sectoriels ${data?.secteur || 'généraux'}.
+        sectoriels ${n.secteur}.
       </p>
       <div style="display: flex; justify-content: center; margin: 30px 0;">
         <div class="score-circle" style="width: 150px; height: 150px;">
@@ -700,7 +831,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     `).join('')}
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">3</div>
     </div>
   </div>
@@ -762,7 +893,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">4</div>
     </div>
   </div>
@@ -778,37 +909,37 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       <h3>Informations Générales</h3>
       <div class="metric-row">
         <span class="metric-label">Nom de l'entreprise</span>
-        <span class="metric-value">${data?.nom || 'Non renseigné'}</span>
+        <span class="metric-value">${n.nom}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Secteur d'activité</span>
-        <span class="metric-value">${data?.secteur || 'Non renseigné'}</span>
+        <span class="metric-value">${n.secteur}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Variante sectorielle</span>
-        <span class="metric-value">${data?.variant || 'Standard'}</span>
+        <span class="metric-value">${n.variant}</span>
       </div>
     </div>
     <div class="dimension-detail">
       <h3>Données Financières</h3>
       <div class="metric-row">
         <span class="metric-label">Chiffre d'affaires annuel</span>
-        <span class="metric-value">${formatEUR(data?.caannuel)}</span>
+        <span class="metric-value">${formatEUR(n.caAnnuel)}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Marge brute</span>
-        <span class="metric-value">${formatPercent(data?.margebrutepct)}</span>
+        <span class="metric-value">${formatPercent(n.margeBrutePct)}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">Charges RH</span>
-        <span class="metric-value">${formatPercent(data?.chargesrhpct)}</span>
+        <span class="metric-value">${formatPercent(n.chargesRhPct)}</span>
       </div>
     </div>
     <div class="dimension-detail">
       <h3>Données Opérationnelles</h3>
       <div class="metric-row">
         <span class="metric-label">Effectif (ETP)</span>
-        <span class="metric-value">${formatNumber(data?.effectifetp)}</span>
+        <span class="metric-value">${formatNumber(n.effectifETP)}</span>
       </div>
       <div class="metric-row">
         <span class="metric-label">CA par ETP</span>
@@ -816,11 +947,11 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
       <div class="metric-row">
         <span class="metric-label">Taux d'occupation</span>
-        <span class="metric-value">${data?.tauxoccupation !== undefined ? formatDecimal(tauxOccupationPct, 0) + '%' : '—'}</span>
+        <span class="metric-value">${n.tauxOccupation !== null ? formatDecimal(tauxOccupationPct, 0) + '%' : '—'}</span>
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">5</div>
     </div>
   </div>
@@ -855,7 +986,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
       <tr>
         <td>Marge Brute</td>
-        <td><strong>${formatPercent(data?.margebrutepct)}</strong></td>
+        <td><strong>${formatPercent(n.margeBrutePct)}</strong></td>
         <td>70%</td>
         <td>75%</td>
       </tr>
@@ -867,13 +998,13 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </tr>
       <tr>
         <td>Charges RH</td>
-        <td><strong>${formatPercent(data?.chargesrhpct)}</strong></td>
+        <td><strong>${formatPercent(n.chargesRhPct)}</strong></td>
         <td>≤55%</td>
         <td>≤50%</td>
       </tr>
     </table>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">6</div>
     </div>
   </div>
@@ -887,9 +1018,9 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>4. Analyse Financière (suite)</h2>
     <h3>Analyse de la Marge Brute</h3>
     <div class="card">
-      <p>Votre marge brute de <strong>${formatPercent(data?.margebrutepct)}</strong> ${safeCalc(data?.margebrutepct) >= 70 ? 'atteint' : 'n\'atteint pas encore'} le seuil de performance.</p>
+      <p>Votre marge brute de <strong>${formatPercent(n.margeBrutePct)}</strong> ${(n.margeBrutePct ?? 0) >= 70 ? 'atteint' : 'n\'atteint pas encore'} le seuil de performance.</p>
       <div class="progress-bar" style="margin-top: 16px;">
-        <div class="progress-fill" style="width: ${Math.min(safeCalc(data?.margebrutepct), 100)}%; background: ${safeCalc(data?.margebrutepct) >= 75 ? '#10b981' : safeCalc(data?.margebrutepct) >= 70 ? '#3b82f6' : '#f59e0b'}"></div>
+        <div class="progress-fill" style="width: ${Math.min(n.margeBrutePct ?? 0, 100)}%; background: ${(n.margeBrutePct ?? 0) >= 75 ? '#10b981' : (n.margeBrutePct ?? 0) >= 70 ? '#3b82f6' : '#f59e0b'}"></div>
       </div>
       <div class="analysis-box" style="margin-top: 16px;">
         <p><strong>Leviers d'amélioration :</strong></p>
@@ -913,7 +1044,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">7</div>
     </div>
   </div>
@@ -927,9 +1058,9 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <h2>4. Analyse Financière (fin)</h2>
     <h3>Structure des Charges RH</h3>
     <div class="card">
-      <p>Les charges RH représentent <strong>${formatPercent(data?.chargesrhpct)}</strong> du chiffre d'affaires.</p>
+      <p>Les charges RH représentent <strong>${formatPercent(n.chargesRhPct)}</strong> du chiffre d'affaires.</p>
       <div class="progress-bar" style="margin-top: 16px;">
-        <div class="progress-fill" style="width: ${Math.min(safeCalc(data?.chargesrhpct), 100)}%; background: ${safeCalc(data?.chargesrhpct) <= 50 ? '#10b981' : safeCalc(data?.chargesrhpct) <= 55 ? '#3b82f6' : '#f59e0b'}"></div>
+        <div class="progress-fill" style="width: ${Math.min(n.chargesRhPct ?? 0, 100)}%; background: ${(n.chargesRhPct ?? 0) <= 50 ? '#10b981' : (n.chargesRhPct ?? 0) <= 55 ? '#3b82f6' : '#f59e0b'}"></div>
       </div>
     </div>
     <div class="dimension-detail">
@@ -955,7 +1086,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       `}
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">8</div>
     </div>
   </div>
@@ -984,7 +1115,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
     <div class="card">
       <div style="text-align: center; padding: 30px 0;">
         <div style="font-size: 64px; font-weight: 800; color: ${operationnelLevel.color};">
-          ${data?.tauxoccupation !== undefined ? formatDecimal(tauxOccupationPct, 0) + '%' : '—'}
+          ${n.tauxOccupation !== null ? formatDecimal(tauxOccupationPct, 0) + '%' : '—'}
         </div>
         <p style="color: #64748b; margin-top: 10px;">Taux d'occupation actuel</p>
       </div>
@@ -993,7 +1124,7 @@ function generateHTMLReport(data: AuditData, scores: Scores): string {
       </div>
     </div>
     <div class="footer">
-      <span>Rapport confidentiel - ${data?.nom || 'Entreprise'}</span>
+      <span>Rapport confidentiel - ${n.nom}</span>
       <div class="page-number">9</div>
     </div>
   </div>
