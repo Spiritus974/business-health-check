@@ -4,6 +4,7 @@
  */
 
 import { AuditDataV2, AuditWarning } from '@/types/audit';
+import { validateAndMapSector, SECTOR_LABELS, AllowedSector } from './sectorValidation';
 
 // ============= Types =============
 
@@ -366,7 +367,14 @@ export function validateJsonImport(jsonString: string): ImportValidationResult {
     errors.push({ field: 'operations.tauxOccupation', message: 'Le taux d\'occupation ne peut pas dépasser 100%' });
   }
   
-  // Step 5: Business warnings (non-blocking)
+  // Step 5: Sector validation
+  const rawSector = getNestedValue(data, 'meta.sector');
+  const sectorResult = validateAndMapSector(rawSector as string | undefined);
+  if (sectorResult.warning) {
+    warnings.push({ field: 'meta.sector', message: sectorResult.warning });
+  }
+  
+  // Step 6: Business warnings (non-blocking)
   const tresorerie = Number(getNestedValue(data, 'finance.tresorerie'));
   if (!isNaN(tresorerie) && tresorerie < -1000000) {
     warnings.push({ field: 'finance.tresorerie', message: 'Trésorerie très négative (< -1M€)' });
@@ -386,9 +394,9 @@ export function validateJsonImport(jsonString: string): ImportValidationResult {
   // BFR approximation: créances + stocks - dettes fournisseurs
   // For now, skip BFR check as we don't have all needed fields
   
-  // Step 6: Convert to AuditDataV2
+  // Step 7: Convert to AuditDataV2
   if (errors.length === 0) {
-    const parsedData = convertToAuditDataV2(data);
+    const parsedData = convertToAuditDataV2(data, sectorResult.canonicalSector);
     return { isValid: true, errors, warnings, parsedData };
   }
   
@@ -405,7 +413,7 @@ function getNestedValue(obj: unknown, path: string): unknown {
   return current;
 }
 
-function convertToAuditDataV2(data: JsonImportData): Partial<AuditDataV2> {
+function convertToAuditDataV2(data: JsonImportData, canonicalSector?: AllowedSector): Partial<AuditDataV2> {
   const safeNum = (val: unknown): number | undefined => {
     if (val === undefined || val === null) return undefined;
     const n = Number(val);
@@ -415,10 +423,13 @@ function convertToAuditDataV2(data: JsonImportData): Partial<AuditDataV2> {
   const safeStr = (val: unknown): string => {
     return String(val ?? '');
   };
+
+  // Use validated sector or fallback
+  const sector = canonicalSector || 'autre';
   
   return {
     businessName: safeStr(data.meta?.companyName),
-    sector: safeStr(data.meta?.sector) || 'Veterinaire',
+    sector: SECTOR_LABELS[sector], // Use human-readable label
     auditDate: new Date().toISOString().split('T')[0],
     dataOrigin: 'client_declarative',
     finance: {
@@ -459,7 +470,7 @@ function convertToAuditDataV2(data: JsonImportData): Partial<AuditDataV2> {
 
 // ============= Excel to AuditDataV2 Conversion =============
 
-export function convertExcelDataToAuditV2(data: Record<string, unknown>): Partial<AuditDataV2> {
+export function convertExcelDataToAuditV2(data: Record<string, unknown>, canonicalSector?: AllowedSector): Partial<AuditDataV2> {
   const meta = data.meta as Record<string, unknown> | undefined;
   const finance = data.finance as Record<string, unknown> | undefined;
   const costs = data.costs as Record<string, unknown> | undefined;
@@ -472,10 +483,13 @@ export function convertExcelDataToAuditV2(data: Record<string, unknown>): Partia
     const n = Number(val);
     return isNaN(n) ? undefined : n;
   };
+
+  // Use validated sector or fallback
+  const sector = canonicalSector || 'autre';
   
   return {
     businessName: String(meta?.companyName ?? ''),
-    sector: String(meta?.sector ?? 'Veterinaire'),
+    sector: SECTOR_LABELS[sector], // Use human-readable label
     auditDate: new Date().toISOString().split('T')[0],
     dataOrigin: 'client_declarative',
     finance: {
@@ -536,6 +550,13 @@ export function validateExcelData(excelResult: ExcelParseResult): ImportValidati
     errors.push({ field: 'operations.tauxOccupation', message: 'Le taux d\'occupation ne peut pas dépasser 100%' });
   }
   
+  // Sector validation
+  const rawSector = getNestedValue(excelResult.data, 'meta.sector');
+  const sectorResult = validateAndMapSector(rawSector as string | undefined);
+  if (sectorResult.warning) {
+    warnings.push({ field: 'meta.sector', message: sectorResult.warning });
+  }
+  
   // Business warnings
   const tresorerie = getNestedValue(excelResult.data, 'finance.tresorerie');
   if (tresorerie !== undefined && Number(tresorerie) < -1000000) {
@@ -553,7 +574,7 @@ export function validateExcelData(excelResult: ExcelParseResult): ImportValidati
   }
   
   if (errors.length === 0) {
-    const parsedData = convertExcelDataToAuditV2(excelResult.data);
+    const parsedData = convertExcelDataToAuditV2(excelResult.data, sectorResult.canonicalSector);
     return { isValid: true, errors, warnings, parsedData };
   }
   
