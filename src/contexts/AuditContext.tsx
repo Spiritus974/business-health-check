@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { AuditContextType, AuditData, AuditState, initialAuditState, AuditWarning, isAuditDataV2, DecisionOutput } from '@/types/audit';
+import { AuditContextType, AuditData, AuditState, initialAuditState, AuditWarning, isAuditDataV2, DecisionOutput, AuditDataV2, ImportMeta, ImportWarningEntry } from '@/types/audit';
 import { computeScores4D } from '@/lib/scoring';
 import { getAuditWarnings } from '@/lib/warnings';
 import { computeDecisionOutput } from '@/lib/decisionEngine';
@@ -38,7 +38,9 @@ export function AuditProvider({ children }: AuditProviderProps) {
       decision,
       businessName: businessName || 'Entreprise',
       isCalculating: false,
-      isPdfGenerating: false
+      isPdfGenerating: false,
+      importMeta: null,
+      importWarnings: [],
     });
 
     // Show critical warnings as toasts
@@ -151,13 +153,40 @@ export function AuditProvider({ children }: AuditProviderProps) {
     }
   }, [state.auditData, state.scores, state.warnings, state.decision, state.businessName]);
 
+  const importAuditFromData = useCallback((data: AuditDataV2, meta: ImportMeta) => {
+    setState(prev => ({ ...prev, isCalculating: true }));
+    
+    const computedScores = computeScores4D(data);
+    const warnings = getAuditWarnings(data);
+    const decision = computeDecisionOutput(data, computedScores, warnings);
+
+    setState({
+      auditData: data,
+      scores: computedScores,
+      warnings,
+      decision,
+      businessName: data.businessName || 'Entreprise',
+      isCalculating: false,
+      isPdfGenerating: false,
+      importMeta: meta,
+      importWarnings: [],
+    });
+
+    toast.success('Données importées avec succès. Elles sont prêtes à être analysées.');
+
+    setTimeout(() => {
+      document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  }, []);
+
   const contextValue: AuditContextType = {
     ...state,
     submitAudit,
     resetAudit,
     setIsPdfGenerating,
     downloadPdf,
-    sendPdfEmail
+    sendPdfEmail,
+    importAuditFromData,
   };
 
   return (

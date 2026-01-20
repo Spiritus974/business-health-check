@@ -7,8 +7,10 @@ import { EmailPdfButton } from '@/components/EmailPdfButton';
 import { WarningsDisplay } from '@/components/WarningsDisplay';
 import { DecisionPanel } from '@/components/DecisionPanel';
 import { SimulationModule } from '@/components/SimulationModule';
+import { DataImportModule } from '@/components/DataImportModule';
 import { useAudit } from '@/hooks/useAudit';
 import { TrendingUp, Users, ShoppingCart, Target, BarChart3 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
   const { scores, auditData, businessName, warnings, decision, submitAudit } = useAudit();
@@ -42,7 +44,18 @@ const Index = () => {
           </div>
           
           <div className="max-w-3xl mx-auto">
-            <AuditForm onSubmit={submitAudit} />
+            <Tabs defaultValue="form" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="form">Saisie manuelle</TabsTrigger>
+                <TabsTrigger value="import">Import données</TabsTrigger>
+              </TabsList>
+              <TabsContent value="form">
+                <AuditForm onSubmit={submitAudit} />
+              </TabsContent>
+              <TabsContent value="import">
+                <DataImportModule />
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </section>

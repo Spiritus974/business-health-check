@@ -187,6 +187,18 @@ export interface DecisionOutput {
   quantifiedRecommendations: QuantifiedRecommendation[];
 }
 
+// Import-related types
+export interface ImportMeta {
+  dataOrigin: 'declaratif_client' | 'excel_champ_valeur';
+  importHash: string;
+  importTimestamp: number;
+}
+
+export interface ImportWarningEntry {
+  field: string;
+  message: string;
+}
+
 export interface AuditState {
   auditData: AuditData | null;
   scores: Scores | null;
@@ -195,6 +207,9 @@ export interface AuditState {
   businessName: string;
   isCalculating: boolean;
   isPdfGenerating: boolean;
+  // Import-related state
+  importMeta: ImportMeta | null;
+  importWarnings: ImportWarningEntry[];
 }
 
 export interface AuditActions {
@@ -203,6 +218,7 @@ export interface AuditActions {
   setIsPdfGenerating: (value: boolean) => void;
   downloadPdf: () => Promise<void>;
   sendPdfEmail: (email: string) => Promise<void>;
+  importAuditFromData: (data: AuditDataV2, meta: ImportMeta) => void;
 }
 
 export interface AuditContextType extends AuditState, AuditActions {}
@@ -267,5 +283,7 @@ export const initialAuditState: AuditState = {
   decision: null,
   businessName: '',
   isCalculating: false,
-  isPdfGenerating: false
+  isPdfGenerating: false,
+  importMeta: null,
+  importWarnings: [],
 };
